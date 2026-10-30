@@ -1,0 +1,38 @@
+{
+  "versao": "Administrador local sobre a primeira versão PHP/MySQL",
+  "integracao": {
+    "status": "aprovado",
+    "verificacoes": 103,
+    "runtime": "PHP 8.3.6 e MariaDB 10.11.14",
+    "inclui": [
+      "primeiro login com banco vazio",
+      "primeiro login concorrente",
+      "conta única",
+      "troca e recuperação de senha",
+      "revogação de sessões antigas",
+      "bloqueio de convites e outras contas",
+      "atualização preserva votos",
+      "isolamento das urnas",
+      "votação concorrente sem duplicar",
+      "anonimato dos votos",
+      "imagens",
+      "apuração",
+      "limite de tentativas"
+    ]
+  },
+  "compilacao": "TypeScript e Vite aprovados",
+  "observacao": "Validação local em banco isolado; não executado no servidor da escola.",
+  "navegador": {
+    "status": "aprovado",
+    "larguras": [390, 1440],
+    "errosJavaScript": 0,
+    "fluxos": [
+      "primeiro login",
+      "conta única",
+      "troca de senha",
+      "cadastro de candidato",
+      "logout",
+      "novo login"
+    ]
+  }
+}

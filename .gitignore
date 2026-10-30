@@ -1,0 +1,40 @@
+# Configurações e credenciais de cada instalação.
+/config/config.php
+/config/local-admin.php
+/ACESSO-ADMIN.txt
+**/.env
+**/.env.*
+!**/.env.example
+**/.dev.vars*
+*.pem
+*.key
+
+# Dependências e arquivos produzidos pelas ferramentas.
+**/node_modules
+**/dist/
+**/.next/
+**/.vinext/
+**/.wrangler/
+**/.sites-runtime/
+**/.venv/
+**/__pycache__/
+*.pyc
+*.tsbuildinfo
+*.log
+/.artifacts/
+/coverage/
+
+# Dados da escola e resultados locais; só os marcadores entram no Git.
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/storage/login-limits/*
+!/storage/login-limits/.gitkeep
+/tests/.local/
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.db
+
+# Metadados do sistema operacional.
+.DS_Store
+Thumbs.db

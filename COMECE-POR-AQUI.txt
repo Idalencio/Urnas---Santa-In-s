@@ -1,0 +1,20 @@
+URNA SANTA INÊS — NOVA VERSÃO V2 ALFA
+
+Leia primeiro LEIA-ME-V2-ALFA.md.
+
+A nova área de testes fica em /v2.
+Ela usa a base PHP/MySQL mais recente do projeto.
+A aplicação anterior e seus dados continuam disponíveis em /.
+Os dados da V2 são separados por ELEIÇÃO.
+Importe a lista geral em Turmas e selecione as turmas em cada eleição.
+O administrador define contas, turmas e permissões em Acessos.
+
+Ao atualizar, preserve config/config.php, config/local-admin.php e storage/uploads.
+Não execute os testes no banco real.
+
+O cronograma das três semanas está em PLANO-3-SEMANAS.md.
+Os resultados de validação estão em VALIDACAO-V2.md.
+
+A documentação do repositório começa em README.md.
+Na instalação nova pelo GitHub, execute php bin/console.php init-admin.
+As configurações privadas e credenciais não são versionadas.

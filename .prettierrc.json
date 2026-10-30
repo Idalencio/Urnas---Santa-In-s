@@ -1,0 +1,16 @@
+{
+  "plugins": ["@prettier/plugin-php"],
+  "phpVersion": "8.3",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "overrides": [
+    {
+      "files": "*.php",
+      "options": {
+        "tabWidth": 4
+      }
+    }
+  ]
+}

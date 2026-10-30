@@ -1,0 +1,58 @@
+name: Validar projeto
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Os testes usam dados fictícios e não precisam escrever no repositório.
+permissions:
+  contents: read
+
+jobs:
+  php-e-interface:
+    runs-on: ubuntu-24.04
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          # Senha fictícia deste serviço temporário, sem vínculo com a escola.
+          MARIADB_ROOT_PASSWORD: urna_ci_local
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Preparar PHP e Python
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y php8.3-cli php8.3-mysql php8.3-mbstring python3-venv
+          python3 -m venv .venv
+          .venv/bin/pip install -r tests/requirements.txt
+      - name: Instalar dependências da interface
+        run: npm ci
+      - name: Conferir formatação e tipos
+        run: |
+          npm run format:check
+          npm run check:v2
+          npm run check:legacy
+      - name: Compilar a interface V2
+        run: npm run build:v2
+      - name: Conferir sintaxe PHP
+        run: find server bin config public tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Testar o fluxo HTTP e a preservação dos dados
+        env:
+          URNA_TEST_DB_HOST: 127.0.0.1
+          URNA_TEST_DB_PORT: '3306'
+          URNA_TEST_DB_USER: root
+          URNA_TEST_DB_PASSWORD: urna_ci_local
+        run: .venv/bin/python tests/run-http.py

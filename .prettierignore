@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/public
+**/package-lock.json
+**/pnpm-lock.yaml
+**/drizzle/meta
+**/*.sql
+**/next-env.d.ts
+**/*.d.ts
+THIRD-PARTY-NOTICES.txt
+
+# Documentos HTML gerados pelos builds e configurações locais privadas.
+/preview/lib/demo-html.ts
+/config/config.php
+/config/local-admin.php

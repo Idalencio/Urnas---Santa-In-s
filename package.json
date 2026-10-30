@@ -1,0 +1,31 @@
+{
+  "name": "urna-santa-ines-v2-alpha",
+  "version": "2.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:v2": "node frontend/v2/build.mjs",
+    "check:v2": "tsc --noEmit --jsx react-jsx --target es2022 --module esnext --moduleResolution bundler --skipLibCheck --allowSyntheticDefaultImports frontend/v2/*.tsx frontend/v2/*.ts",
+    "format": "prettier --write '**/*.{php,ts,tsx,js,mjs,json,css,md,yml}'",
+    "format:check": "prettier --check '**/*.{php,ts,tsx,js,mjs,json,css,md,yml}'",
+    "check:legacy": "tsc --noEmit -p frontend/tsconfig.json",
+    "test:http": "python3 tests/run-http.py",
+    "sync:preview": "node bin/sync-preview.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "0.468.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@prettier/plugin-php": "0.26.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "0.25.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

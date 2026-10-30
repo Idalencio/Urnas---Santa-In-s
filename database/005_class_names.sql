@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS v2_class_aliases (
+ original_name VARCHAR(80) PRIMARY KEY, current_name VARCHAR(80) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
