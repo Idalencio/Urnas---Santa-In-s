@@ -367,6 +367,7 @@ function access(s: any, me: any, action: string, b: any) {
       election: 'manageElections',
       candidate: 'manageElections',
       duplicate: 'manageElections',
+      deleteElection: 'manageElections',
       image: 'manageElections',
       enroll: 'manageVoters',
       electors: 'manageVoters',
@@ -702,6 +703,25 @@ async function admin(req: Request, b: any) {
         candidates: [],
       });
       return { ok: true, id };
+    }
+    if (action === 'deleteElection') {
+      const e = election(s, b.electionId);
+      if (e.published || e.closed) fail('Somente eleições em preparação podem ser excluídas.', 409);
+      if (
+        s.ballots.some((vote: any) => vote.electionId === e.id) ||
+        (s.electors[e.id] || []).some((voter: any) => voter.voted)
+      ) {
+        fail('Esta eleição possui registros de votação e não pode ser excluída.', 409);
+      }
+      // A mutação com revisão torna exclusão e publicação concorrentes incompatíveis.
+      s.elections = s.elections.filter((item: any) => item.id !== e.id);
+      delete s.electors[e.id];
+      if (s.electionTerminalLinks) delete s.electionTerminalLinks[e.id];
+      for (const terminal of s.terminals)
+        if (terminal.electionId === e.id) terminal.electionId = null;
+      for (const account of s.accounts || [])
+        account.electionIds = (account.electionIds || []).filter((id: string) => id !== e.id);
+      return { ok: true };
     }
     if (action === 'candidate') {
       const e = draft(s, v.electionId),

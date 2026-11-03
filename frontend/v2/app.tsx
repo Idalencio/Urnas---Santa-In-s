@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useId } from 'react';
 import {
   Plus,
+  Trash2,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -60,6 +61,59 @@ function checks(e: DetailedElection, models: Model[]): Issue[] {
     out.push({ text: 'Escolha os eleitores desta eleição.', step: 2 });
   if (!models.length) out.push({ text: 'Escolha pelo menos um modelo de urna.', step: 3 });
   return out;
+}
+/** Confirmação explícita; erros permanecem visíveis dentro do diálogo. */
+function DeleteElectionDialog({
+  election,
+  busy,
+  close,
+  remove,
+}: {
+  election: DetailedElection;
+  busy: boolean;
+  close: () => void;
+  remove: () => Promise<void>;
+}) {
+  const [error, setError] = useState('');
+  return (
+    <Modal title="Excluir eleição em preparação" onClose={() => !busy && close()}>
+      <div className="editor-form delete-election-dialog">
+        <p>
+          Excluir <strong>{election.name}</strong>?
+        </p>
+        <p className="simple-hint">
+          Os candidatos e a lista de eleitores desta eleição serão removidos. O cadastro geral de
+          alunos e as outras eleições serão mantidos.
+        </p>
+        <p className="delete-warning">Esta ação não pode ser desfeita.</p>
+        {error && (
+          <div className="error-banner" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="form-footer">
+          <button className="button secondary" disabled={busy} onClick={close}>
+            Cancelar
+          </button>
+          <button
+            className="button danger"
+            disabled={busy}
+            onClick={async () => {
+              setError('');
+              try {
+                await remove();
+              } catch (err: any) {
+                setError(err.message);
+              }
+            }}
+          >
+            <Trash2 size={16} />
+            {busy ? 'Excluindo…' : 'Excluir eleição'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 }
 function Photo({
   label,
@@ -830,6 +884,11 @@ export default function App() {
                     create={create}
                     choose={choose}
                     go={go}
+                    remove={
+                      canEdit
+                        ? (election) => setModal({ kind: 'deleteElection', election })
+                        : undefined
+                    }
                   />
                   {canEdit && (
                     <details className="clean-example">
@@ -856,6 +915,16 @@ export default function App() {
                   <div className="simple-wizard-heading">
                     <h1>{creating ? 'Nova eleição' : e?.name}</h1>
                     <Badge tone="blue">Em preparação</Badge>
+                    {draft && canEdit && (
+                      <button
+                        className="text-button draft-delete"
+                        disabled={busy}
+                        onClick={() => setModal({ kind: 'deleteElection', election: e })}
+                      >
+                        <Trash2 size={16} />
+                        Excluir eleição
+                      </button>
+                    )}
                   </div>
                   <nav className="simple-steps" aria-label="Etapas da eleição">
                     {steps.map((label, i) => (
@@ -1476,6 +1545,18 @@ export default function App() {
             <span>Desenvolvido pela T.I.</span>
           </footer>
         </main>
+        {modal?.kind === 'deleteElection' && canEdit && (
+          <DeleteElectionDialog
+            election={modal.election}
+            busy={busy}
+            close={() => setModal(null)}
+            remove={async () => {
+              await action('deleteElection', { electionId: modal.election.id });
+              go('elections');
+              setNotice('Eleição em preparação excluída.');
+            }}
+          />
+        )}
         {modal?.kind === 'candidate' && e && (
           <Modal
             title={e.hasVice ? 'Prefeito e vice' : 'Candidato'}

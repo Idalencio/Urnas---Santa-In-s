@@ -217,7 +217,7 @@ function v2CheckAction(array $me, string $action, array $b, array $v): void
         return;
     }
     $permission = match ($action) {
-        'election', 'candidate', 'duplicate', 'image' => 'manageElections',
+        'election', 'candidate', 'duplicate', 'deleteElection', 'image' => 'manageElections',
         'enroll', 'electors', 'unlock' => 'manageVoters',
         'publish', 'close' => 'publishElections',
         default => '',

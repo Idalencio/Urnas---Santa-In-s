@@ -7,6 +7,7 @@ import {
   Images,
   Play,
   Plus,
+  Trash2,
   Search,
   Vote,
   Users,
@@ -39,12 +40,14 @@ export function ElectionList({
   create,
   choose,
   go,
+  remove,
 }: {
   elections: Details[];
   canCreate?: boolean;
   create: () => void;
   choose: (e: Details) => void;
   go: (view: string) => void;
+  remove?: (e: Details) => void;
 }) {
   const [filter, setFilter] = useState('current');
   const [search, setSearch] = useState('');
@@ -78,10 +81,10 @@ export function ElectionList({
   }
   return (
     <>
-      <section className="beauty-hero refined-hero">
+      <section className="beauty-hero refined-hero minimal-heading">
         <div className="beauty-hero-copy">
-          <span className="beauty-kicker">COLÉGIO SANTA INÊS · URNA ESCOLAR</span>
-          <h1>Eleições da escola</h1>
+          <span className="beauty-kicker">PAINEL DE VOTAÇÃO</span>
+          <h1>Eleições</h1>
           <p>Prepare a eleição, escolha as turmas e abra a votação.</p>
           <div className="beauty-hero-actions">
             {canCreate && (
@@ -96,9 +99,6 @@ export function ElectionList({
               <ArrowRight size={16} />
             </button>
           </div>
-        </div>
-        <div className="beauty-hero-art" aria-hidden="true">
-          <img src="/vote-box-csi.svg" alt="" />
         </div>
       </section>
       <div className="election-overview" role="group" aria-label="Filtrar eleições por situação">
@@ -184,6 +184,16 @@ export function ElectionList({
                 {!e.published ? 'Continuar' : 'Gerenciar'}
                 <ArrowRight size={16} />
               </button>
+              {remove && !e.published && !e.closed && (
+                <button
+                  className="icon-button draft-delete"
+                  aria-label={'Excluir eleição ' + e.name}
+                  title="Excluir eleição em preparação"
+                  onClick={() => remove(e)}
+                >
+                  <Trash2 size={17} />
+                </button>
+              )}
             </article>
           ))}
         </div>
@@ -219,28 +229,6 @@ export function ElectionList({
           }
         />
       )}
-      <div className="dashboard-shortcuts">
-        <button onClick={() => go('students')}>
-          <span className="shortcut-icon">
-            <Users size={20} />
-          </span>
-          <span>
-            <strong>Turmas e alunos</strong>
-            <small>Consulte o cadastro da escola</small>
-          </span>
-          <ArrowRight size={17} />
-        </button>
-        <button onClick={() => go('terminals')}>
-          <span className="shortcut-icon">
-            <Monitor size={20} />
-          </span>
-          <span>
-            <strong>Urnas de votação</strong>
-            <small>Abra ou teste os dois modelos</small>
-          </span>
-          <ArrowRight size={17} />
-        </button>
-      </div>
     </>
   );
 }

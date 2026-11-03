@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## 03/11/2026 — exclusão de rascunhos e painel mais limpo
+
+- Exclusão de eleições em preparação, com confirmação na lista e no editor.
+- Autorização por permissão de gerenciamento e acesso à eleição.
+- Proteção de eleições publicadas, encerradas ou com registros de votação.
+- Remoção atômica do rascunho e vínculos, preservando alunos e urnas compartilhadas.
+- Menu claro, cabeçalho compacto, filtros discretos e menos elementos decorativos.
+- 174 verificações do adaptador aprovadas, incluindo exclusão concorrente com publicação.
+- Suite PHP de exclusão integrada ao runner e ao CI; execução PHP local indisponível
+  neste ambiente. Revisão visual pendente: o navegador da prévia excedeu o tempo de resposta.
+
 ## 03/11/2026 — navegação e apresentação do painel
 
 - Visão inicial mais compacta, com filtros por situação e contagens de eleições.

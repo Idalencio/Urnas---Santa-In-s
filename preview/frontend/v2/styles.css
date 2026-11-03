@@ -4227,3 +4227,355 @@
     padding: 15px;
   }
 }
+
+/* Acabamento leve do painel; a tela de votação conserva seu desenho original. */
+.minimal-panel {
+  background: #f7f8fa;
+  --ink: #24344c;
+  --border: #e4e8ee;
+}
+.minimal-panel .sidebar {
+  background: #fff;
+  border-right: 1px solid #e4e8ee;
+  box-shadow: none;
+}
+.minimal-panel .brand {
+  color: #173f86;
+}
+.minimal-panel .brand strong {
+  color: #173f86;
+}
+.minimal-panel .brand span {
+  color: #67758b;
+  letter-spacing: 0;
+}
+.minimal-panel .brand > img {
+  box-shadow: none;
+  border-color: #e8edf4;
+}
+.minimal-panel .nav-label {
+  color: #8290a2;
+  font-size: 10px;
+}
+.minimal-panel .sidebar nav button,
+.minimal-panel .sidebar-bottom button {
+  color: #52637b;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 9px;
+  font-weight: 500;
+}
+.minimal-panel .sidebar nav button:hover,
+.minimal-panel .sidebar-bottom button:hover {
+  background: #f3f6fb;
+  color: #173f86;
+}
+.minimal-panel .sidebar nav button.active {
+  background: #edf3fe;
+  color: #194d9f;
+  border-color: transparent;
+  box-shadow: none;
+  font-weight: 650;
+}
+.minimal-panel .sidebar nav button.active::before {
+  display: none;
+}
+.minimal-panel .sidebar-bottom {
+  border-color: #edf0f5;
+}
+.minimal-panel .topbar {
+  background: #fff;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.minimal-panel .simple-content {
+  padding: 32px 36px 24px;
+}
+.minimal-panel .minimal-heading {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
+  margin: 0 0 26px;
+  overflow: visible;
+}
+.minimal-panel .minimal-heading::after {
+  display: none;
+}
+.minimal-panel .minimal-heading .beauty-hero-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  align-items: center;
+  column-gap: 24px;
+}
+.minimal-panel .minimal-heading .beauty-kicker {
+  grid-column: 1;
+  color: #697d98;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  margin-bottom: 8px;
+}
+.minimal-panel .minimal-heading h1 {
+  grid-column: 1;
+  color: #223854;
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 8px;
+}
+.minimal-panel .minimal-heading .beauty-hero-copy > p {
+  grid-column: 1;
+  color: #6c7b90;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.minimal-panel .minimal-heading .beauty-hero-actions {
+  grid-column: 2;
+  grid-row: 1/4;
+  margin: 0;
+  gap: 10px;
+}
+.minimal-panel .button {
+  box-shadow: none;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.minimal-panel .button.primary,
+.minimal-panel .minimal-heading .button.primary {
+  background: #2358b4;
+  border-color: #2358b4;
+  color: white;
+  box-shadow: none;
+}
+.minimal-panel .button.primary:hover:not(:disabled),
+.minimal-panel .minimal-heading .button.primary:hover:not(:disabled) {
+  background: #194795;
+  border-color: #194795;
+  box-shadow: none;
+}
+.minimal-panel .hero-shortcut {
+  background: #fff;
+  border-color: #dce3ed;
+  color: #466185;
+  border-radius: 8px;
+}
+.minimal-panel .hero-shortcut:hover {
+  background: #f3f6fb;
+}
+.minimal-panel .election-overview {
+  background: #fff;
+  border: 1px solid #e3e8f0;
+  padding: 7px;
+  border-radius: 12px;
+  gap: 5px;
+  margin-bottom: 27px;
+}
+.minimal-panel .overview-item {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 7px;
+  padding: 11px 12px;
+  justify-content: center;
+}
+.minimal-panel .overview-item > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-direction: row-reverse;
+}
+.minimal-panel .overview-item strong {
+  font-size: 12px;
+  min-width: 23px;
+  padding: 4px 6px;
+  text-align: center;
+  border-radius: 5px;
+  color: #637590;
+  background: #f1f4f8;
+}
+.minimal-panel .overview-item small {
+  margin: 0;
+  color: #60718a;
+  font-size: 12px;
+}
+.minimal-panel .overview-icon {
+  display: none;
+}
+.minimal-panel .overview-item:hover {
+  background: #f6f8fc;
+}
+.minimal-panel .overview-item.selected {
+  background: #edf3ff;
+}
+.minimal-panel .overview-item.selected small,
+.minimal-panel .overview-item.selected strong {
+  color: #2255a8;
+}
+.minimal-panel .overview-item.selected strong {
+  background: #dce9ff;
+}
+.minimal-panel .clean-election-list {
+  box-shadow: none;
+  border-color: #e3e8f0;
+  border-radius: 12px;
+}
+.minimal-panel .clean-election-list > article {
+  padding: 20px;
+  gap: 15px;
+}
+.minimal-panel .clean-election-list > article:hover {
+  background: #fbfcfe;
+}
+.minimal-panel .clean-election-list h2 {
+  color: #293f5d;
+  font-size: 15px;
+  font-weight: 650;
+}
+.minimal-panel .clean-election-list p {
+  color: #708099;
+}
+.minimal-panel .beauty-election-icon {
+  width: 39px;
+  height: 39px;
+  flex-basis: 39px;
+  border-radius: 10px;
+  border: none;
+}
+.minimal-panel .badge {
+  border: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+.minimal-panel .clean-search {
+  border-color: #dfe5ee;
+  box-shadow: none;
+  border-radius: 8px;
+}
+.minimal-panel .draft-delete {
+  color: #a14b57;
+}
+.minimal-panel .icon-button.draft-delete {
+  flex: 0 0 36px;
+  height: 36px;
+  background: transparent;
+  border-radius: 8px;
+}
+.minimal-panel .draft-delete:hover:not(:disabled) {
+  background: #fdf0f1;
+  color: #a42c40;
+}
+.minimal-panel .simple-wizard-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.minimal-panel .simple-wizard-heading > .draft-delete {
+  margin-left: auto;
+  padding: 9px;
+  border-radius: 8px;
+}
+.minimal-panel .delete-election-dialog p {
+  line-height: 1.65;
+}
+.minimal-panel .delete-warning {
+  font-size: 12px;
+  color: #a03e4d;
+}
+.minimal-panel .button.danger {
+  background: #b53548;
+  border: 1px solid #b53548;
+  color: #fff;
+}
+.minimal-panel .button.danger:hover:not(:disabled) {
+  background: #9b293b;
+}
+.minimal-panel .button:disabled {
+  opacity: 0.55;
+}
+.minimal-panel .beauty-page-heading {
+  margin-bottom: 26px;
+}
+.minimal-panel .beauty-title-mark {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  box-shadow: none;
+  border: 0;
+  border-radius: 11px;
+  background: #edf3fe;
+}
+.minimal-panel .beauty-page-heading h1 {
+  font-size: 29px !important;
+  letter-spacing: -0.03em;
+}
+.minimal-panel .simple-panel,
+.minimal-panel .clean-detail-panel,
+.minimal-panel .clean-urn-card,
+.minimal-panel .school-class-grid > article {
+  border-color: #e3e8f0;
+  box-shadow: none;
+  border-radius: 12px;
+}
+.minimal-panel .clean-urn-card::before,
+.minimal-panel .clean-urn-card::after {
+  display: none;
+}
+.minimal-panel .clean-urn-preview {
+  height: 190px;
+  background: #f6f8fc;
+  border-color: #e8edf5;
+  border-radius: 10px;
+}
+.minimal-panel .simple-steps {
+  border-radius: 10px;
+  box-shadow: none;
+}
+.minimal-panel .content-footer {
+  border-top: 1px solid #e6ebf2;
+  padding-top: 20px;
+  margin-top: 34px;
+  color: #7b889a;
+}
+@media (max-width: 1050px) {
+  .minimal-panel .minimal-heading .beauty-hero-copy {
+    grid-template-columns: 1fr;
+  }
+  .minimal-panel .minimal-heading .beauty-hero-actions {
+    grid-column: 1;
+    grid-row: 4;
+    margin-top: 19px;
+    flex-direction: row;
+  }
+}
+@media (max-width: 700px) {
+  .minimal-panel .simple-content {
+    padding: 23px 17px;
+  }
+  .minimal-panel .minimal-heading h1 {
+    font-size: 28px;
+  }
+  .minimal-panel .election-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+  .minimal-panel .overview-item {
+    padding: 11px 6px;
+  }
+  .minimal-panel .clean-election-list > article {
+    padding: 17px 14px;
+    gap: 10px;
+  }
+  .minimal-panel .clean-election-list > article > .badge {
+    margin-left: 49px;
+  }
+  .minimal-panel .simple-wizard-heading > .draft-delete {
+    margin-left: 0;
+  }
+  .minimal-panel .beauty-page-heading h1 {
+    font-size: 26px !important;
+  }
+  .minimal-panel .clean-urn-preview {
+    height: 170px;
+  }
+}

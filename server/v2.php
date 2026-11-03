@@ -43,6 +43,44 @@ function v2Draft(string $id): array
     }
     return $e;
 }
+/** Exclui somente rascunhos, sob a mesma trava usada pela publicação. */
+function v2DeleteElection(string $id): void
+{
+    transaction(function () use ($id) {
+        $e = v2Election($id, true);
+        if ($e['published'] || $e['closed']) {
+            fail('Somente eleições em preparação podem ser excluídas.', 409);
+        }
+        // Nunca apagar participação ou votos, mesmo em um cadastro inconsistente.
+        if (
+            one('SELECT id FROM v2_ballots WHERE election_id=? LIMIT 1', [$id]) ||
+            one('SELECT matricula FROM v2_electors WHERE election_id=? AND voted=1 LIMIT 1', [$id])
+        ) {
+            fail('Esta eleição possui registros de votação e não pode ser excluída.', 409);
+        }
+        sql('DELETE FROM v2_election_terminals WHERE election_id=?', [$id]);
+        sql('UPDATE v2_terminals SET election_id=NULL WHERE election_id=?', [$id]);
+        sql('DELETE FROM v2_electors WHERE election_id=?', [$id]);
+        sql('DELETE FROM v2_candidates WHERE election_id=?', [$id]);
+        sql('DELETE FROM v2_election_owners WHERE election_id=?', [$id]);
+        foreach (
+            all('SELECT admin_id,election_ids FROM v2_accounts ORDER BY admin_id FOR UPDATE')
+            as $account
+        ) {
+            $ids = json_decode($account['election_ids'], true, 64, JSON_THROW_ON_ERROR);
+            if (in_array($id, $ids, true)) {
+                sql('UPDATE v2_accounts SET election_ids=? WHERE admin_id=?', [
+                    json_encode(
+                        array_values(array_filter($ids, fn($value) => $value !== $id)),
+                        JSON_THROW_ON_ERROR,
+                    ),
+                    $account['admin_id'],
+                ]);
+            }
+        }
+        sql('DELETE FROM v2_elections WHERE id=?', [$id]);
+    });
+}
 function v2Candidates(string $id): array
 {
     return all(
@@ -753,6 +791,9 @@ function v2App(): never
         case 'election':
             $id = v2SaveElection($v, $me);
             reply(['ok' => true, 'id' => $id]);
+        case 'deleteElection':
+            v2DeleteElection(clean($b['electionId'] ?? ''));
+            break;
         case 'candidate':
             v2SaveCandidate($v);
             break;

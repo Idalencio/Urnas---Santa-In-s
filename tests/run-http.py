@@ -116,7 +116,7 @@ return [
                     time.sleep(0.1)
             else:
                 raise RuntimeError("O servidor PHP local não respondeu.")
-            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py"):
+            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py"):
                 subprocess.run([os.sys.executable, str(ROOT / "tests" / suite)], env=env, check=True)
         print("OK Suites HTTP concluídas em banco local descartável.", flush=True)
     finally:

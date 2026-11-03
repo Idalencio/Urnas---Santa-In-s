@@ -843,3 +843,12 @@ ALTER TABLE `demo_sessions` ADD `account_id` text;
 - Adaptador hospedado: `lib/demo-api.ts`, `drizzle/*.sql` e `.openai/hosting.json`.
 
 Esta documentação descreve o que foi implementado, incluindo os campos mantidos por compatibilidade. Não altera esquema, dados, permissões ou publicação.
+
+## Exclusão de eleições em preparação
+
+A ação `deleteElection` de `POST /api/v2/app` exige `manageElections` e acesso à eleição.
+Aceita `electionId` e recusa eleições publicadas, encerradas ou com voto/participação registrada.
+No MySQL, a transação trava a eleição antes de remover candidatos, eleitores daquele rascunho,
+associações às urnas e proprietário. Remove também atribuições em `v2_accounts.election_ids`.
+O cadastro geral de alunos e as urnas permanecem. No D1, a mesma operação é atômica pela
+revisão do estado. Fotos compartilhadas não são apagadas. Não há alteração de esquema.

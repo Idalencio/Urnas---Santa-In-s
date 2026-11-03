@@ -39,7 +39,7 @@ export function Shell({
     go(id);
   };
   return (
-    <div className="app-shell design-alt app-shell-csi v2-app original-panel polished-panel">
+    <div className="app-shell design-alt app-shell-csi v2-app original-panel polished-panel minimal-panel">
       <a className="skip-to-content" href="#main-content">
         Ir para o conteúdo
       </a>
