@@ -3916,3 +3916,314 @@
   background: #962237;
   border-color: #962237;
 }
+
+/* Painel: leitura rápida, ações visíveis e filtros que funcionam no celular. */
+.polished-panel .refined-hero {
+  min-height: 208px;
+  margin-bottom: 20px;
+  padding: 27px 32px;
+}
+.polished-panel .refined-hero h1 {
+  font-size: clamp(27px, 3vw, 34px);
+}
+.hero-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
+  background: transparent;
+  border: 1px solid #ffffff50;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  min-height: 45px;
+}
+.hero-shortcut:hover {
+  background: #ffffff15;
+}
+.election-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 28px;
+}
+.overview-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  text-align: left;
+  border: 1px solid #dce5f0;
+  border-radius: 13px;
+  padding: 17px 16px;
+  background: #fff;
+  color: #29466f;
+  min-width: 0;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.overview-item:hover {
+  border-color: #8ca8d4;
+  background: #fafdff;
+}
+.overview-item.selected {
+  border-color: #2457ba;
+  box-shadow: inset 0 -3px #2457ba;
+  background: #f4f8ff;
+}
+.overview-icon,
+.shortcut-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 39px;
+  height: 39px;
+  border-radius: 11px;
+  background: #edf3ff;
+  color: #3760a9;
+}
+.overview-item.active .overview-icon {
+  color: #287751;
+  background: #eaf7ef;
+}
+.overview-item.scheduled .overview-icon {
+  color: #94701c;
+  background: #fff7df;
+}
+.overview-item.closed .overview-icon {
+  color: #697b91;
+  background: #f0f3f7;
+}
+.overview-item strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+.overview-item small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #526786;
+  line-height: 1.4;
+}
+.refined-list-tools > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.polished-panel .refined-list-tools h2 {
+  font-size: 17px;
+  margin: 0;
+  color: #29466f;
+}
+.list-count {
+  color: #627591;
+  font-size: 12px;
+}
+.list-search-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+.search-clear {
+  padding: 7px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #5b7190;
+  border-radius: 6px;
+  margin-right: 3px;
+}
+.search-clear:hover {
+  background: #edf3ff;
+}
+.election-next {
+  display: block;
+  margin-top: 9px;
+  color: #667a94;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.election-next.draft {
+  color: #3c62a2;
+}
+.election-next.active {
+  color: #287751;
+}
+.polished-panel .refined-election-list > article {
+  padding: 21px 22px;
+}
+.election-row-copy h2 {
+  overflow-wrap: anywhere;
+}
+.dashboard-shortcuts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 22px;
+}
+.dashboard-shortcuts > button {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: #fff;
+  border: 1px solid #e0e7f2;
+  border-radius: 13px;
+  padding: 18px;
+  text-align: left;
+  color: #345580;
+  min-width: 0;
+}
+.dashboard-shortcuts > button:hover {
+  border-color: #9fb8dd;
+  background: #fafcff;
+}
+.dashboard-shortcuts > button > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.dashboard-shortcuts strong {
+  display: block;
+  font-size: 13px;
+}
+.dashboard-shortcuts small {
+  display: block;
+  font-size: 12px;
+  color: #6b7e98;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.visible-urn-elections {
+  max-height: 250px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border-top: 1px solid #e6edf5;
+  padding-top: 14px;
+}
+.polished-panel .visible-urn-elections h3 {
+  color: #6a7d98;
+  font-size: 11px;
+  font-weight: 650;
+  margin: 0 0 6px;
+}
+.visible-urn-elections > button {
+  min-height: 46px;
+}
+.visible-urn-elections > button > span:first-child {
+  overflow-wrap: anywhere;
+}
+.schedule-options {
+  padding: 17px 20px;
+  border: 1px solid #e1e9f5;
+  border-radius: 12px;
+  background: #f9fbff;
+  margin: 16px 0;
+}
+.schedule-options > .check-row {
+  margin: 0;
+}
+.schedule-options > .field {
+  margin-top: 18px;
+}
+.class-search-match {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #456692;
+  overflow-wrap: anywhere;
+  margin: 5px 0;
+}
+.roster-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 17px;
+  color: #617592;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.roster-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+.skip-to-content {
+  position: fixed;
+  top: -100px;
+  left: 20px;
+  z-index: 1000;
+  background: #fff;
+  color: #1747ab;
+  padding: 14px 20px;
+  border: 2px solid #1747ab;
+  border-radius: 10px;
+}
+.skip-to-content:focus {
+  top: 12px;
+}
+.polished-panel :is(button, a, input, select):focus-visible {
+  outline: 3px solid #9ab9f0;
+  outline-offset: 3px;
+}
+.polished-panel .button:disabled {
+  cursor: not-allowed;
+}
+@media (max-width: 1000px) {
+  .election-overview {
+    gap: 9px;
+  }
+  .overview-item {
+    padding: 15px 12px;
+    gap: 9px;
+  }
+  .overview-icon {
+    flex-basis: 33px;
+    height: 33px;
+  }
+}
+@media (max-width: 700px) {
+  .election-overview {
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 23px;
+  }
+  .overview-item {
+    padding: 15px;
+  }
+  .overview-item strong {
+    font-size: 23px;
+  }
+  .polished-panel .refined-hero {
+    padding: 24px;
+  }
+  .polished-panel .refined-hero .beauty-hero-actions {
+    flex-direction: row;
+    gap: 10px;
+  }
+  .hero-shortcut {
+    padding: 12px;
+  }
+  .refined-list-tools {
+    align-items: flex-start;
+  }
+  .list-search-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .list-search-actions .clean-search {
+    flex: 1;
+    min-width: 180px;
+  }
+  .dashboard-shortcuts {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .polished-panel .refined-election-list > article {
+    padding: 18px 16px;
+  }
+  .schedule-options {
+    padding: 15px;
+  }
+}

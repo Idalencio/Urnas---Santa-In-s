@@ -1,39 +1,88 @@
 import { useState } from 'react';
-import { ArrowRight, Check, Copy, Keyboard, Images, Play, Plus, Search, Vote } from 'lucide-react';
-import { Badge, Empty } from '../app/components';
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  Keyboard,
+  Images,
+  Play,
+  Plus,
+  Search,
+  Vote,
+  Users,
+  Monitor,
+  Clock3,
+  CheckCircle2,
+  X,
+  Pencil as PencilIcon,
+} from 'lucide-react';
+import { Badge, Empty, formatted } from '../app/components';
 import { UrnaPreview, PageHeading } from './workflow';
 import { status, type Election, type Candidate, type Terminal } from './domain';
 type Details = Election & { candidates: Candidate[] };
+const searchText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim();
 const labels = {
   draft: 'Em preparação',
   active: 'Aberta',
   scheduled: 'Agendada',
   closed: 'Encerrada',
 };
+/** Os filtros usam as eleições já autorizadas pela API, sem ampliar o acesso. */
 export function ElectionList({
   elections,
   canCreate = true,
   create,
   choose,
+  go,
 }: {
   elections: Details[];
   canCreate?: boolean;
   create: () => void;
   choose: (e: Details) => void;
+  go: (view: string) => void;
 }) {
-  const [closed, setClosed] = useState(false),
-    [search, setSearch] = useState('');
-  const rows = elections.filter(
-    (e) =>
-      (status(e) === 'closed') === closed && e.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const [filter, setFilter] = useState('current');
+  const [search, setSearch] = useState('');
+  const groups = [
+    { id: 'active', label: 'Abertas', icon: Vote },
+    { id: 'draft', label: 'Em preparação', icon: PencilIcon },
+    { id: 'scheduled', label: 'Agendadas', icon: Clock3 },
+    { id: 'closed', label: 'Encerradas', icon: CheckCircle2 },
+  ];
+  const order = { active: 0, draft: 1, scheduled: 2, closed: 3 };
+  const rows = elections
+    .filter(
+      (e) =>
+        (filter === 'current' ? status(e) !== 'closed' : status(e) === filter) &&
+        searchText(e.name).includes(searchText(search)),
+    )
+    .sort(
+      (a, b) =>
+        order[status(a)] - order[status(b)] ||
+        a.name.localeCompare(b.name, 'pt-BR', { numeric: true }),
+    );
+  function nextTask(e: Details) {
+    if (status(e) === 'active') return 'Encerra em ' + formatted(e.endsAt);
+    if (status(e) === 'scheduled') return 'Começa em ' + formatted(e.startsAt);
+    if (status(e) === 'closed') return 'Votação encerrada';
+    const active = e.candidates.filter((c) => c.active);
+    if (!active.length) return 'Próximo passo: cadastrar candidatos';
+    if (e.hasVice && active.some((c) => !c.viceName)) return 'Próximo passo: completar os vices';
+    if (e.requireMatricula && !e.electorCount) return 'Próximo passo: escolher as turmas';
+    return 'Próximo passo: revisar e publicar';
+  }
   return (
     <>
-      <section className="beauty-hero">
+      <section className="beauty-hero refined-hero">
         <div className="beauty-hero-copy">
           <span className="beauty-kicker">COLÉGIO SANTA INÊS · URNA ESCOLAR</span>
           <h1>Eleições da escola</h1>
-          <p>Um espaço para organizar escolhas e incentivar a participação.</p>
+          <p>Prepare a eleição, escolha as turmas e abra a votação.</p>
           <div className="beauty-hero-actions">
             {canCreate && (
               <button className="button primary" onClick={create}>
@@ -41,58 +90,97 @@ export function ElectionList({
                 Nova eleição
               </button>
             )}
-            <div className="beauty-hero-meta">
-              <span>
-                <i />
-                {elections.filter((e) => status(e) === 'active').length} abertas
-              </span>
-              <span>{elections.filter((e) => status(e) === 'draft').length} em preparação</span>
-            </div>
+            <button className="hero-shortcut" onClick={() => go('terminals')}>
+              <Monitor size={17} />
+              Abrir urnas
+              <ArrowRight size={16} />
+            </button>
           </div>
         </div>
         <div className="beauty-hero-art" aria-hidden="true">
           <img src="/vote-box-csi.svg" alt="" />
         </div>
       </section>
-      <div className="clean-list-tools">
-        <div className="clean-segments" aria-label="Filtrar eleições">
-          <button className={!closed ? 'active' : ''} onClick={() => setClosed(false)}>
-            Atuais
+      <div className="election-overview" role="group" aria-label="Filtrar eleições por situação">
+        {groups.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className={'overview-item ' + id + (filter === id ? ' selected' : '')}
+            aria-pressed={filter === id}
+            onClick={() => setFilter(filter === id ? 'current' : id)}
+          >
+            <span className="overview-icon">
+              <Icon size={20} />
+            </span>
+            <span>
+              <strong>{elections.filter((e) => status(e) === id).length}</strong>
+              <small>{label}</small>
+            </span>
           </button>
-          <button className={closed ? 'active' : ''} onClick={() => setClosed(true)}>
-            Encerradas
-          </button>
+        ))}
+      </div>
+      <div className="clean-list-tools refined-list-tools">
+        <div>
+          <h2>
+            {filter === 'current' ? 'Eleições atuais' : groups.find((g) => g.id === filter)?.label}
+          </h2>
+          <span className="list-count" role="status">
+            {rows.length} {rows.length === 1 ? 'eleição' : 'eleições'}
+          </span>
         </div>
-        <label className="clean-search">
-          <Search size={17} />
-          <input
-            aria-label="Buscar eleição"
-            placeholder="Buscar eleição"
-            value={search}
-            onChange={(ev) => setSearch(ev.target.value)}
-          />
-        </label>
+        <div className="list-search-actions">
+          {filter !== 'current' && (
+            <button className="text-button" onClick={() => setFilter('current')}>
+              Ver atuais
+            </button>
+          )}
+          <label className="clean-search">
+            <Search size={17} />
+            <input
+              aria-label="Buscar eleição"
+              placeholder="Buscar pelo nome"
+              value={search}
+              onChange={(ev) => setSearch(ev.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                className="search-clear"
+                aria-label="Limpar busca de eleições"
+                onClick={() => setSearch('')}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </label>
+        </div>
       </div>
       {rows.length ? (
-        <div className="clean-election-list">
+        <div className="clean-election-list refined-election-list">
           {rows.map((e) => (
             <article key={e.id}>
               <span className={'beauty-election-icon ' + status(e)} aria-hidden="true">
                 <Vote size={22} />
               </span>
-              <div>
+              <div className="election-row-copy">
                 <h2>{e.name}</h2>
                 <p>
                   {e.candidates.filter((c) => c.active).length}{' '}
-                  {e.hasVice ? 'chapas' : 'candidatos'} · {e.electorCount || 0} eleitores
+                  {e.hasVice ? 'chapas' : 'candidatos'} ·{' '}
+                  {e.requireMatricula ? (e.electorCount || 0) + ' eleitores' : 'Sem matrícula'}
                 </p>
+                <span className={'election-next ' + status(e)}>{nextTask(e)}</span>
               </div>
               <Badge
                 tone={status(e) === 'active' ? 'green' : status(e) === 'draft' ? 'blue' : 'neutral'}
               >
                 {labels[status(e)]}
               </Badge>
-              <button className="button secondary" onClick={() => choose(e)}>
+              <button
+                className="button secondary"
+                aria-label={(e.published ? 'Gerenciar ' : 'Continuar ') + e.name}
+                onClick={() => choose(e)}
+              >
                 {!e.published ? 'Continuar' : 'Gerenciar'}
                 <ArrowRight size={16} />
               </button>
@@ -104,29 +192,55 @@ export function ElectionList({
           title={
             search
               ? 'Nenhuma eleição encontrada'
-              : closed
-                ? 'Nenhuma eleição encerrada'
-                : 'Sua próxima eleição começa aqui'
+              : filter === 'current'
+                ? 'Sua próxima eleição começa aqui'
+                : 'Nenhuma eleição nesta situação'
           }
           text={
             search
-              ? 'Tente outro nome.'
-              : closed
-                ? 'As votações encerradas ficarão nesta aba.'
-                : canCreate
-                  ? 'Cadastre os candidatos e escolha quem participa.'
+              ? 'Tente outro nome ou consulte as eleições em outra situação.'
+              : filter === 'current'
+                ? canCreate
+                  ? 'Comece pelos candidatos e escolha as turmas participantes.'
                   : 'O administrador pode liberar eleições para sua conta em Acessos.'
+                : 'Escolha outra situação para consultar as eleições.'
           }
           action={
-            canCreate && !closed && !search ? (
+            search ? (
+              <button className="button secondary" onClick={() => setSearch('')}>
+                Limpar busca
+              </button>
+            ) : canCreate && filter === 'current' ? (
               <button className="button primary" onClick={create}>
-                Nova eleição
                 <Plus size={17} />
+                Nova eleição
               </button>
             ) : undefined
           }
         />
       )}
+      <div className="dashboard-shortcuts">
+        <button onClick={() => go('students')}>
+          <span className="shortcut-icon">
+            <Users size={20} />
+          </span>
+          <span>
+            <strong>Turmas e alunos</strong>
+            <small>Consulte o cadastro da escola</small>
+          </span>
+          <ArrowRight size={17} />
+        </button>
+        <button onClick={() => go('terminals')}>
+          <span className="shortcut-icon">
+            <Monitor size={20} />
+          </span>
+          <span>
+            <strong>Urnas de votação</strong>
+            <small>Abra ou teste os dois modelos</small>
+          </span>
+          <ArrowRight size={17} />
+        </button>
+      </div>
     </>
   );
 }
@@ -151,7 +265,7 @@ export function UrnasPanel({
       <PageHeading
         eyebrow="AMBIENTE DE VOTAÇÃO"
         title="Urnas"
-        description="Escolha como a turma vai votar."
+        description="Abra a urna no aparelho da turma. As eleições são configuradas no menu Eleições."
         icon={<Keyboard size={25} />}
       />
       <div className="clean-urn-grid">
@@ -163,6 +277,8 @@ export function UrnasPanel({
                 ['active', 'scheduled'].includes(status(e)) &&
                 (e.terminalIds?.includes(t.id) || t.electionId === e.id),
             );
+            const activeCount = available.filter((e) => status(e) === 'active').length;
+            const scheduledCount = available.length - activeCount;
             const title = t.model === 'images' ? 'Por imagens' : 'Com teclado';
             return (
               <article className={'clean-urn-card beauty-urn-' + t.model} key={t.id}>
@@ -192,15 +308,22 @@ export function UrnasPanel({
                   />
                   <strong>
                     {available.length
-                      ? available.length +
-                        ' ' +
-                        (available.length === 1 ? 'eleição disponível' : 'eleições disponíveis')
+                      ? [
+                          activeCount
+                            ? activeCount + (activeCount === 1 ? ' aberta' : ' abertas')
+                            : '',
+                          scheduledCount
+                            ? scheduledCount + (scheduledCount === 1 ? ' agendada' : ' agendadas')
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
                       : 'Nenhuma eleição publicada'}
                   </strong>
                 </div>
                 {available.length > 0 ? (
-                  <details className="clean-urn-elections">
-                    <summary>Ver eleições</summary>
+                  <div className="clean-urn-elections visible-urn-elections">
+                    <h3>Eleições nesta urna</h3>
                     {available.map((e) => (
                       <button key={e.id} onClick={() => choose(e)}>
                         <span>{e.name}</span>
@@ -210,7 +333,7 @@ export function UrnasPanel({
                         <ArrowRight size={14} />
                       </button>
                     ))}
-                  </details>
+                  </div>
                 ) : (
                   <p className="clean-urn-empty">
                     Publique uma eleição e selecione este modelo na última etapa.

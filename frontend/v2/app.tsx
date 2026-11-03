@@ -587,7 +587,8 @@ export default function App() {
     setSelected(item.id);
     setCreating(false);
     setStep(
-      item.candidates.some((c) => c.active)
+      item.candidates.some((c) => c.active) &&
+        !(item.hasVice && item.candidates.some((c) => c.active && !c.viceName))
         ? item.requireMatricula && !item.electorCount
           ? 2
           : 3
@@ -717,6 +718,16 @@ export default function App() {
   const linked =
     data?.terminals.filter((t) => e?.terminalIds?.includes(t.id) || t.electionId === e?.id) || [];
   const issue = e ? checks(e, models) : [];
+  // As marcas refletem os dados salvos, não apenas as etapas visitadas.
+  const stepReady = e
+    ? [
+        true,
+        e.candidates.some((c) => c.active) &&
+          (!e.hasVice || e.candidates.filter((c) => c.active).every((c) => c.viceName)),
+        !e.requireMatricula || !!e.electorCount,
+        false,
+      ]
+    : [];
   function preview(model: Model) {
     setTestVotes(0);
     setPreviewModel(model);
@@ -799,7 +810,7 @@ export default function App() {
           })
         }
       >
-        <main className="content simple-content">
+        <main id="main-content" tabIndex={-1} className="content simple-content">
           {loading ? (
             <p>Carregando…</p>
           ) : !data ? (
@@ -818,6 +829,7 @@ export default function App() {
                     canCreate={canEdit}
                     create={create}
                     choose={choose}
+                    go={go}
                   />
                   {canEdit && (
                     <details className="clean-example">
@@ -855,7 +867,9 @@ export default function App() {
                         aria-current={step === i ? 'step' : undefined}
                         onClick={() => next(i)}
                       >
-                        <span>{i + 1}</span>
+                        <span>
+                          {stepReady[i] ? <Check size={15} aria-label="Etapa preenchida" /> : i + 1}
+                        </span>
                         {label}
                       </button>
                     ))}
@@ -1114,8 +1128,7 @@ export default function App() {
                             onChange={(ev) => setEnd(ev.target.value)}
                           />
                         </Field>
-                        <details className="simple-details">
-                          <summary>Agendar início</summary>
+                        <section className="schedule-options" aria-label="Início da votação">
                           <label className="check-row">
                             <input
                               type="checkbox"
@@ -1133,7 +1146,7 @@ export default function App() {
                               />
                             </Field>
                           )}
-                        </details>
+                        </section>
                         <div className="simple-footer">
                           <button className="button secondary" onClick={() => next(2)}>
                             <ArrowLeft size={17} />

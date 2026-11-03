@@ -1,4 +1,4 @@
-import { useState, useId, type ReactNode } from 'react';
+import { useState, useId, useEffect, type ReactNode } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -337,14 +337,39 @@ export function ClassesPanel({
     [importing, setImporting] = useState(false),
     [studentSearch, setStudentSearch] = useState(''),
     [dialog, setDialog] = useState<RosterDialog>(null);
-  const filtered = classes.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())),
+  const normalize = (text: string) =>
+    text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR')
+      .trim();
+  // A busca usa somente o cadastro que o servidor autorizou para esta conta.
+  const matches = (student: Student) =>
+    normalize(student.name + ' ' + student.matricula).includes(normalize(search));
+  const classMatches = new Map<string, string[]>();
+  if (admin && normalize(search))
+    for (const student of students) {
+      if (matches(student)) {
+        const names = classMatches.get(student.className) || [];
+        if (names.length < 2) names.push(student.name);
+        classMatches.set(student.className, names);
+      }
+    }
+  const filtered = classes.filter(
+      (c) => normalize(c.name).includes(normalize(search)) || classMatches.has(c.name),
+    ),
     rows = students.filter(
       (s) =>
         s.className === selected &&
-        (s.name + ' ' + s.matricula).toLowerCase().includes(studentSearch.toLowerCase()),
+        normalize(s.name + ' ' + s.matricula).includes(normalize(studentSearch)),
     ),
     total = classes.reduce((n, c) => n + c.count, 0),
     selectedCount = classes.find((c) => c.name === selected)?.count || 0;
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1));
+  useEffect(() => setPage(0), [selected, studentSearch]);
+  const visibleRows = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   return (
     <>
       <PageHeading
@@ -428,7 +453,7 @@ export function ClassesPanel({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((s) => (
+                {visibleRows.map((s) => (
                   <tr key={s.matricula}>
                     <td>{s.name}</td>
                     <td>{s.matricula}</td>
@@ -458,8 +483,40 @@ export function ClassesPanel({
                 ))}
               </tbody>
             </table>
-            {!rows.length && <p className="roster-empty">Nenhum aluno encontrado.</p>}
+            {!rows.length && (
+              <p className="roster-empty">
+                Nenhum aluno encontrado. Tente outro nome ou matrícula.
+              </p>
+            )}
           </div>
+          {!!rows.length && (
+            <div className="roster-pagination">
+              <span role="status">
+                {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, rows.length)}{' '}
+                de {rows.length} alunos
+              </span>
+              {rows.length > pageSize && (
+                <div>
+                  <button
+                    className="button secondary small"
+                    disabled={currentPage === 0}
+                    onClick={() => setPage(currentPage - 1)}
+                  >
+                    <ArrowLeft size={15} />
+                    Anterior
+                  </button>
+                  <button
+                    className="button secondary small"
+                    disabled={(currentPage + 1) * pageSize >= rows.length}
+                    onClick={() => setPage(currentPage + 1)}
+                  >
+                    Próxima
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       ) : (
         <>
@@ -471,8 +528,8 @@ export function ClassesPanel({
             <label className="clean-search">
               <Search size={17} />
               <input
-                aria-label="Buscar turma cadastrada"
-                placeholder="Buscar turma"
+                aria-label={admin ? 'Buscar turma, aluno ou matrícula' : 'Buscar turma cadastrada'}
+                placeholder={admin ? 'Turma, aluno ou matrícula' : 'Buscar turma'}
                 value={search}
                 onChange={(ev) => setSearch(ev.target.value)}
               />
@@ -485,6 +542,13 @@ export function ClassesPanel({
                   <Users size={20} />
                   <div>
                     <h2>{c.name}</h2>
+                    {admin &&
+                      normalize(search) &&
+                      !normalize(c.name).includes(normalize(search)) && (
+                        <span className="class-search-match">
+                          {classMatches.get(c.name)?.join(' · ')}
+                        </span>
+                      )}
                     <p>
                       {c.count} {c.count === 1 ? 'aluno' : 'alunos'}
                     </p>
@@ -495,7 +559,9 @@ export function ClassesPanel({
                       aria-label={'Ver alunos da turma ' + c.name}
                       onClick={() => {
                         setSelected(c.name);
-                        setStudentSearch('');
+                        setStudentSearch(
+                          normalize(c.name).includes(normalize(search)) ? '' : search,
+                        );
                       }}
                     >
                       <ArrowRight size={18} />
@@ -506,11 +572,13 @@ export function ClassesPanel({
             </div>
           ) : (
             <Empty
-              title="Nenhuma turma disponível"
+              title={search ? 'Nenhum resultado encontrado' : 'Nenhuma turma disponível'}
               text={
-                admin
-                  ? 'Adicione um aluno ou importe uma lista. As turmas são formadas automaticamente.'
-                  : 'Peça ao administrador para liberar as turmas da sua conta.'
+                search
+                  ? 'Tente outro nome, matrícula ou turma.'
+                  : admin
+                    ? 'Adicione um aluno ou importe uma lista. As turmas são formadas automaticamente.'
+                    : 'Peça ao administrador para liberar as turmas da sua conta.'
               }
             />
           )}

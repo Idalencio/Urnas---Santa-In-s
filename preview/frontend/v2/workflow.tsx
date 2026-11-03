@@ -40,6 +40,9 @@ export function Shell({
   };
   return (
     <div className="app-shell design-alt app-shell-csi v2-app original-panel polished-panel">
+      <a className="skip-to-content" href="#main-content">
+        Ir para o conteúdo
+      </a>
       <aside id="school-navigation" className={'sidebar ' + (menu ? 'mobile-open' : '')}>
         <a
           className="brand"

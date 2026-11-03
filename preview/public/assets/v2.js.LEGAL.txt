@@ -69,6 +69,7 @@ lucide-react/dist/esm/icons/arrow-right.mjs:
 lucide-react/dist/esm/icons/check.mjs:
 lucide-react/dist/esm/icons/chevron-right.mjs:
 lucide-react/dist/esm/icons/circle-check.mjs:
+lucide-react/dist/esm/icons/clock-3.mjs:
 lucide-react/dist/esm/icons/copy.mjs:
 lucide-react/dist/esm/icons/delete.mjs:
 lucide-react/dist/esm/icons/download.mjs:
