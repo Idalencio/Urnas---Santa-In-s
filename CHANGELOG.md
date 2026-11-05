@@ -1,5 +1,19 @@
 # Histórico de alterações
 
+## 05/11/2026 — identidade visual e acabamento do painel
+
+- Cabeçalho no azul do colégio, logo preservada e destaque dourado na navegação.
+- Títulos, botões, campos, estados e janelas padronizados em todas as áreas administrativas.
+- Textos mais legíveis, campos com mais espaço e ações alinhadas na lista de eleições.
+- Tela de entrada revisada e página própria para Minha conta.
+- Acesso à conta pelo nome do usuário, saída sem duplicação e fechamento do menu por Escape.
+- Rodapé do colégio com o crédito da T.I.; tela da urna pública preservada.
+
+Validação: tipos das duas interfaces e do projeto hospedado, builds, formatação,
+174 verificações do adaptador e revisão visual em navegador com dados fictícios.
+Telas revisadas: eleições, configuração inicial, urnas, turmas, cadastro de aluno e entrada.
+Revisão responsiva com viewports de 390 e 768 px, incluindo abertura e fechamento do menu.
+
 ## 03/11/2026 — exclusão de rascunhos e painel mais limpo
 
 - Exclusão de eleições em preparação, com confirmação na lista e no editor.

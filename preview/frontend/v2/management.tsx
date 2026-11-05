@@ -81,26 +81,26 @@ export function ElectionList({
   }
   return (
     <>
-      <section className="beauty-hero refined-hero minimal-heading">
-        <div className="beauty-hero-copy">
-          <span className="beauty-kicker">PAINEL DE VOTAÇÃO</span>
-          <h1>Eleições</h1>
-          <p>Prepare a eleição, escolha as turmas e abra a votação.</p>
-          <div className="beauty-hero-actions">
+      <PageHeading
+        eyebrow="GESTÃO ESCOLAR"
+        title="Eleições"
+        icon={<Vote size={25} />}
+        description="Organize cada eleição, acompanhe a preparação e abra a votação."
+        action={
+          <div className="school-page-actions">
+            <button className="button secondary" onClick={() => go('terminals')}>
+              <Monitor size={17} />
+              Abrir urnas
+            </button>
             {canCreate && (
               <button className="button primary" onClick={create}>
                 <Plus size={18} />
                 Nova eleição
               </button>
             )}
-            <button className="hero-shortcut" onClick={() => go('terminals')}>
-              <Monitor size={17} />
-              Abrir urnas
-              <ArrowRight size={16} />
-            </button>
           </div>
-        </div>
-      </section>
+        }
+      />
       <div className="election-overview" role="group" aria-label="Filtrar eleições por situação">
         {groups.map(({ id, label, icon: Icon }) => (
           <button
@@ -124,7 +124,7 @@ export function ElectionList({
           <h2>
             {filter === 'current' ? 'Eleições atuais' : groups.find((g) => g.id === filter)?.label}
           </h2>
-          <span className="list-count" role="status">
+          <span className="list-count" role="status" aria-live="polite">
             {rows.length} {rows.length === 1 ? 'eleição' : 'eleições'}
           </span>
         </div>
@@ -166,16 +166,26 @@ export function ElectionList({
                 <h2>{e.name}</h2>
                 <p>
                   {e.candidates.filter((c) => c.active).length}{' '}
-                  {e.hasVice ? 'chapas' : 'candidatos'} ·{' '}
-                  {e.requireMatricula ? (e.electorCount || 0) + ' eleitores' : 'Sem matrícula'}
+                  {e.hasVice
+                    ? e.candidates.filter((c) => c.active).length === 1
+                      ? 'chapa'
+                      : 'chapas'
+                    : e.candidates.filter((c) => c.active).length === 1
+                      ? 'candidato'
+                      : 'candidatos'}{' '}
+                  · {e.requireMatricula ? (e.electorCount || 0) + ' eleitores' : 'Sem matrícula'}
                 </p>
                 <span className={'election-next ' + status(e)}>{nextTask(e)}</span>
               </div>
-              <Badge
-                tone={status(e) === 'active' ? 'green' : status(e) === 'draft' ? 'blue' : 'neutral'}
-              >
-                {labels[status(e)]}
-              </Badge>
+              <span className={'school-election-status ' + status(e)}>
+                <Badge
+                  tone={
+                    status(e) === 'active' ? 'green' : status(e) === 'draft' ? 'blue' : 'neutral'
+                  }
+                >
+                  {labels[status(e)]}
+                </Badge>
+              </span>
               <button
                 className="button secondary"
                 aria-label={(e.published ? 'Gerenciar ' : 'Continuar ') + e.name}
@@ -192,6 +202,7 @@ export function ElectionList({
                   onClick={() => remove(e)}
                 >
                   <Trash2 size={17} />
+                  <span className="school-delete-label">Excluir</span>
                 </button>
               )}
             </article>

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Monitor,
   Vote,
@@ -34,12 +34,25 @@ export function Shell({
     ...(admin ? [{ id: 'team', label: 'Acessos', icon: ShieldCheck }] : []),
     { id: 'account', label: 'Conta', icon: Settings },
   ];
+  useEffect(() => {
+    if (!menu) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenu(false);
+    };
+    document.addEventListener('keydown', escape);
+    return () => document.removeEventListener('keydown', escape);
+  }, [menu]);
   const navigate = (id: string) => {
     setMenu(false);
     go(id);
   };
   return (
-    <div className="app-shell design-alt app-shell-csi v2-app original-panel polished-panel minimal-panel">
+    <div
+      className={
+        'app-shell design-alt app-shell-csi v2-app original-panel polished-panel school-panel' +
+        (!signedIn ? ' school-guest' : '')
+      }
+    >
       <a className="skip-to-content" href="#main-content">
         Ir para o conteúdo
       </a>
@@ -55,7 +68,7 @@ export function Shell({
           <img src="/csi-logo.png" alt="Colégio Santa Inês" />
           <div>
             <strong>Santa Inês</strong>
-            <span>Urna escolar</span>
+            <span>Colégio · Urna escolar</span>
           </div>
         </a>
         <span className="nav-label">PAINEL DE ELEIÇÕES</span>
@@ -89,15 +102,21 @@ export function Shell({
       <div className="app-body">
         <header className="topbar">
           <div>
-            <button
-              className="mobile-menu icon-button"
-              aria-label="Abrir menu"
-              aria-expanded={menu}
-              aria-controls="school-navigation"
-              onClick={() => setMenu((x) => !x)}
-            >
-              <Menu size={22} />
-            </button>
+            {signedIn && (
+              <button
+                className="mobile-menu icon-button"
+                aria-label={menu ? 'Fechar menu' : 'Abrir menu'}
+                aria-expanded={menu}
+                aria-controls="school-navigation"
+                onClick={() => setMenu((x) => !x)}
+              >
+                <Menu size={22} />
+              </button>
+            )}
+            <span className="mobile-school-brand">
+              <img src="/csi-logo.png" alt="" />
+              <strong>Santa Inês</strong>
+            </span>
             <span className="breadcrumb">
               Urna escolar <ChevronRight size={16} />
               <b>{nav.find((item) => item.id === view)?.label || 'Eleições'}</b>
@@ -105,15 +124,16 @@ export function Shell({
           </div>
           {signedIn && (
             <div className="top-actions">
-              <div className="user-chip">
+              <button
+                className="user-chip"
+                aria-label="Abrir minha conta"
+                onClick={() => navigate('account')}
+              >
                 <span>{name.slice(0, 1).toUpperCase() || 'A'}</span>
-                <div>
+                <span className="user-details">
                   <strong>{name}</strong>
                   <small>{admin ? 'Administrador' : 'Equipe'}</small>
-                </div>
-              </div>
-              <button className="icon-button" aria-label="Sair da conta" onClick={logout}>
-                <LogOut size={20} />
+                </span>
               </button>
             </div>
           )}

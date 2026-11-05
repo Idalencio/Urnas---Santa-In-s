@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useId } from 'react';
 import {
   Plus,
+  Settings,
   Trash2,
   ArrowLeft,
   ArrowRight,
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import { Login, AccountSettings } from '../app/access';
 import { Field, Modal, Badge, Empty, csvDownload, formatted, localInput } from '../app/components';
-import { Shell, UrnaPreview } from './workflow';
+import { Shell, UrnaPreview, PageHeading } from './workflow';
 import { ElectionList, UrnasPanel } from './management';
 import { ClassPicker, ClassesPanel, type SchoolClass, type Student } from './people';
 import { TeamPanel, allowed, type TeamAccount } from './access';
@@ -1536,12 +1537,22 @@ export default function App() {
               )}
 
               {view === 'account' && (
-                <AccountSettings username={data.me.username} name={data.me.name} />
+                <>
+                  <PageHeading
+                    eyebrow="ACESSO PESSOAL"
+                    title="Minha conta"
+                    icon={<Settings size={25} />}
+                    description="Confira seus dados de acesso e atualize sua senha."
+                  />
+                  <AccountSettings username={data.me.username} name={data.me.name} />
+                </>
               )}
             </>
           )}
           <footer className="content-footer">
-            <span>Santa Inês · Urna escolar</span>
+            <span>
+              Colégio Santa Inês <span className="school-footer-dot">·</span> Urna escolar
+            </span>
             <span>Desenvolvido pela T.I.</span>
           </footer>
         </main>
