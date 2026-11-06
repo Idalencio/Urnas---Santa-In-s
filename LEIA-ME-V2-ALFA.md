@@ -69,7 +69,7 @@ várias eleições abertas ao mesmo tempo. Publicar uma não ocupa nem substitui
 
 Aceita seis chapas ou mais, com números de até cinco dígitos, sem zero automático.
 `1`, `12` e `345` podem coexistir. Um número pode ser usado em outra eleição.
-A foto do prefeito aparece maior e a do vice menor, com sua identificação.
+A foto do candidato aparece maior e a do vice menor, com sua identificação.
 Na urna por imagens, complete as fotos de todos os candidatos e vices.
 
 O teste da tela não registra votos nem consome matrículas. Para criar seis chapas

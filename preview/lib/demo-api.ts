@@ -610,10 +610,31 @@ function csvRows(text: any) {
       className = clean(r[cols[1]], 80),
       m = matricula(r[cols[2]]);
     if (!name || !className) fail('Confira nome e turma na linha ' + (i + 2));
-    if (seen.has(m)) fail('Matrícula repetida na linha ' + (i + 2));
+    if (seen.has(m)) fail('Matrícula repetida na linha ' + (i + 2) + ': ' + m);
     seen.add(m);
     return { name, className, matricula: m };
   });
+}
+/** A mesma matrícula atualiza o cadastro; a comparação usa o estado desta revisão. */
+function csvPlan(s: any, incoming: any[]) {
+  const byMatricula = new Map<string, any>(
+    s.students.map((student: any) => [student.matricula, student]),
+  );
+  const summary = { added: 0, updated: 0, unchanged: 0, reactivated: 0 };
+  const rows = incoming.map((student) => {
+    const row = { ...student, className: canonicalClass(s, student.className) };
+    const old = byMatricula.get(row.matricula);
+    const change = !old
+      ? 'added'
+      : old.active === 0
+        ? 'reactivated'
+        : old.name !== row.name || old.className !== row.className
+          ? 'updated'
+          : 'unchanged';
+    summary[change]++;
+    return { ...row, change };
+  });
+  return { rows, count: rows.length, summary };
 }
 function validImage(s: string) {
   return (
@@ -645,8 +666,7 @@ async function admin(req: Request, b: any) {
   }
   if (action === 'image') return json(await upload(b));
   if (action === 'csvPreview') {
-    const rows = csvRows(b.csv);
-    return json({ rows, count: rows.length });
+    return json(csvPlan(snapshot, csvRows(b.csv)));
   }
   if (action === 'electors') {
     const { s } = await load();
@@ -754,13 +774,27 @@ async function admin(req: Request, b: any) {
       return { ok: true };
     }
     if (action === 'csvImport') {
-      for (const incoming of students!) {
-        const row = { ...incoming, className: canonicalClass(s, incoming.className) };
-        const i = s.students.findIndex((x: any) => x.matricula === row.matricula);
-        if (i < 0) s.students.push(row);
-        else s.students[i] = row;
+      // Recalculado em cada tentativa CAS, incluindo importações concorrentes.
+      const plan = csvPlan(s, students!);
+      const byMatricula = new Map<string, any>(
+        s.students.map((student: any) => [student.matricula, student]),
+      );
+      for (const row of plan.rows) {
+        if (row.change === 'unchanged') continue;
+        const value = {
+          matricula: row.matricula,
+          name: row.name,
+          className: row.className,
+          active: 1,
+        };
+        const old = byMatricula.get(row.matricula);
+        if (old) Object.assign(old, value);
+        else {
+          s.students.push(value);
+          byMatricula.set(value.matricula, value);
+        }
       }
-      return { ok: true, count: students!.length };
+      return { ok: true, count: plan.count, summary: plan.summary };
     }
     if (action === 'enroll') {
       const e = draft(s, b.electionId),
@@ -852,7 +886,7 @@ async function admin(req: Request, b: any) {
       if (chosen.includes('images')) {
         const missing = candidates.find((c: any) => !c.image || (e.hasVice && !c.viceImage));
         if (missing)
-          fail('Complete as fotos do prefeito e do vice da chapa número ' + missing.code + '.');
+          fail('Complete as fotos do candidato e do vice da chapa número ' + missing.code + '.');
       }
       if (models) {
         s.electionTerminalLinks ||= {};

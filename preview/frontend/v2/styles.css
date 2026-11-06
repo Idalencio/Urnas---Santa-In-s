@@ -5346,3 +5346,71 @@
     font-size: 20px;
   }
 }
+
+/* Resultado da comparação de listas, com o mesmo padrão do painel. */
+.school-panel .simple-import {
+  display: grid;
+  gap: 18px;
+}
+.school-panel .simple-import .simple-hint {
+  margin: 0;
+}
+.import-file-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.import-file-heading strong {
+  font-size: 14px;
+  color: #2b4971;
+  overflow-wrap: anywhere;
+}
+.import-file-heading > span {
+  font-size: 13px;
+  color: #5d7394;
+}
+.import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid #dfe6f0;
+  border-radius: 10px;
+  background: #f7f9fe;
+  gap: 1px;
+  overflow: hidden;
+}
+.import-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+}
+.import-summary strong {
+  font-size: 23px;
+  color: #17438f;
+  line-height: 1.2;
+}
+.import-summary span {
+  font-size: 13px;
+  color: #536e94;
+}
+.import-result > strong {
+  display: block;
+  font-size: 14px;
+}
+.import-result > p {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.school-panel .simple-import > .button {
+  justify-self: start;
+}
+@media (max-width: 700px) {
+  .import-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .import-summary > div {
+    padding: 14px;
+  }
+}

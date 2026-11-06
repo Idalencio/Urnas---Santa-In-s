@@ -279,7 +279,7 @@ export default function Ballot({
           <div className="standard-shell child-urna-shell">
             <div className="standard-screen child-candidate-screen">
               <div className="screen-head">
-                <span>{election?.hasVice ? 'ESCOLHA SEU PREFEITO' : 'ESCOLHA SEU CANDIDATO'}</span>
+                <span>ESCOLHA SEU CANDIDATO</span>
                 <strong>Toque em uma opção</strong>
               </div>
               <div className="child-option-grid">
@@ -300,7 +300,7 @@ export default function Ballot({
                         <img
                           className="v2-option-vice"
                           src={c.viceImage || '/favicon.svg'}
-                          alt={'Vice-prefeito: ' + c.viceName}
+                          alt={'Vice: ' + c.viceName}
                         />
                       )}
                     </span>
@@ -317,14 +317,12 @@ export default function Ballot({
             <div className="keypad child-preview-panel">
               {candidate ? (
                 <div className="child-featured-candidate">
-                  <span>
-                    {election?.hasVice ? 'PREFEITO SELECIONADO' : 'CANDIDATO SELECIONADO'}
-                  </span>
+                  <span>CANDIDATO SELECIONADO</span>
                   <div className="v2-slate-portraits">
                     <img
                       className="v2-mayor-photo"
                       src={candidate.image || '/favicon.svg'}
-                      alt={'Prefeito: ' + candidate.name}
+                      alt={'Candidato: ' + candidate.name}
                     />
                     {!!election?.hasVice && candidate.viceName && (
                       <figure className="v2-vice-photo">
@@ -333,7 +331,7 @@ export default function Ballot({
                           alt={'Vice: ' + candidate.viceName}
                         />
                         <figcaption>
-                          <b>Vice-prefeito</b>
+                          <b>Vice</b>
                           <span>{candidate.viceName}</span>
                         </figcaption>
                       </figure>
@@ -404,12 +402,12 @@ export default function Ballot({
                     candidate ? (
                       <div className="chosen-candidate">
                         <div>
-                          <small>{election?.hasVice ? 'PREFEITO' : 'CANDIDATO'}</small>
+                          <small>CANDIDATO</small>
                           <h2>{candidate.name}</h2>
                           <p>Número {candidate.code}</p>
                           {!!election?.hasVice && candidate.viceName && (
                             <p>
-                              <b>Vice-prefeito:</b> {candidate.viceName}
+                              <b>Vice:</b> {candidate.viceName}
                             </p>
                           )}
                         </div>
@@ -417,7 +415,7 @@ export default function Ballot({
                           <img
                             className="v2-mayor-photo"
                             src={candidate.image || '/favicon.svg'}
-                            alt={'Prefeito: ' + candidate.name}
+                            alt={'Candidato: ' + candidate.name}
                           />
                           {!!election?.hasVice && candidate.viceName && (
                             <figure className="v2-vice-photo">
@@ -426,7 +424,7 @@ export default function Ballot({
                                 alt={'Vice: ' + candidate.viceName}
                               />
                               <figcaption>
-                                <b>Vice-prefeito</b>
+                                <b>Vice</b>
                                 <span>{candidate.viceName}</span>
                               </figcaption>
                             </figure>
@@ -557,7 +555,7 @@ export default function Ballot({
                   <img
                     className="v2-mayor-photo"
                     src={candidate.image || '/favicon.svg'}
-                    alt={'Prefeito: ' + candidate.name}
+                    alt={'Candidato: ' + candidate.name}
                   />
                   {!!election?.hasVice && candidate.viceName && (
                     <figure className="v2-vice-photo">
@@ -566,7 +564,7 @@ export default function Ballot({
                         alt={'Vice: ' + candidate.viceName}
                       />
                       <figcaption>
-                        <b>Vice-prefeito</b>
+                        <b>Vice</b>
                         <span>{candidate.viceName}</span>
                       </figcaption>
                     </figure>

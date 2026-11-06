@@ -58,8 +58,11 @@ return [
 """)
 
     def php(code):
-        return subprocess.run([PHP, "-r", code], cwd=qa, env=env, check=True,
-                              text=True, capture_output=True)
+        result = subprocess.run([PHP, "-r", code], cwd=qa, env=env,
+                                text=True, capture_output=True)
+        if result.returncode:
+            raise RuntimeError(result.stdout + result.stderr)
+        return result
 
     connection = r"""
     require 'server/bootstrap.php';
@@ -116,7 +119,7 @@ return [
                     time.sleep(0.1)
             else:
                 raise RuntimeError("O servidor PHP local não respondeu.")
-            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py"):
+            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py", "import-v2.py"):
                 subprocess.run([os.sys.executable, str(ROOT / "tests" / suite)], env=env, check=True)
         print("OK Suites HTTP concluídas em banco local descartável.", flush=True)
     finally:

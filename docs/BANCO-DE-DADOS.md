@@ -852,3 +852,23 @@ No MySQL, a transação trava a eleição antes de remover candidatos, eleitores
 associações às urnas e proprietário. Remove também atribuições em `v2_accounts.election_ids`.
 O cadastro geral de alunos e as urnas permanecem. No D1, a mesma operação é atômica pela
 revisão do estado. Fotos compartilhadas não são apagadas. Não há alteração de esquema.
+
+## Importação comparada por matrícula
+
+`csvPreview` de `POST /api/v2/app` retorna `rows`, `count` e `summary`. Cada linha
+recebe `change`: `added`, `updated`, `unchanged` ou `reactivated`. `summary` contém
+a quantidade em cada situação. Os nomes antigos de turmas são resolvidos antes
+da comparação. A operação exige administrador e não grava o cadastro.
+
+`csvImport` valida o arquivo inteiro e refaz a comparação antes de gravar. No PHP,
+a trava do cadastro geral serializa essa transação; a primary key de
+`v2_students.matricula` e o upsert protegem a unicidade. No D1, cada tentativa de
+atualização por revisão refaz a comparação e mantém uma entrada por matrícula.
+A resposta inclui `ok`, `count` e o `summary` calculado na gravação.
+
+A mesma matrícula atualiza nome e turma. Cadastros idênticos não são regravados;
+matrículas inativas são reativadas no mesmo registro. Nomes iguais com matrículas
+diferentes representam cadastros distintos. Os zeros à esquerda fazem parte da
+matrícula. Uma matrícula repetida dentro do CSV cancela a importação inteira.
+Alunos ausentes do arquivo são preservados. Eleitorados, participação e votos
+de eleições publicadas não são alterados pela importação do cadastro geral.

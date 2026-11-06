@@ -210,15 +210,15 @@ function ElectionForm({
           required
           maxLength={160}
           value={v.name}
-          placeholder="Ex.: Prefeito e vice do 6º ano"
+          placeholder="Ex.: Candidato e vice do 6º ano"
           onChange={(ev) => setV({ ...v, name: ev.target.value })}
         />
       </Field>
       <div className="election-vice-settings">
         <fieldset className="simple-radio">
-          <legend>Terá vice-prefeito?</legend>
+          <legend>Terá vice?</legend>
           {[
-            { v: 1, t: 'Sim, prefeito e vice' },
+            { v: 1, t: 'Sim, candidato e vice' },
             { v: 0, t: 'Não, somente candidato' },
           ].map((x) => (
             <label key={x.v}>
@@ -321,8 +321,8 @@ function CandidateForm({
       </Field>
       <div className="simple-people">
         <section>
-          <h3>{election.hasVice ? 'Prefeito' : 'Candidato'}</h3>
-          <Field label={election.hasVice ? 'Nome do prefeito' : 'Nome do candidato'}>
+          <h3>Candidato</h3>
+          <Field label="Nome do candidato">
             <input
               required
               maxLength={160}
@@ -331,7 +331,7 @@ function CandidateForm({
             />
           </Field>
           <Photo
-            label={election.hasVice ? 'Foto do prefeito' : 'Foto do candidato'}
+            label="Foto do candidato"
             value={v.image}
             onChange={(s) => change('image', s)}
             upload={upload}
@@ -340,8 +340,8 @@ function CandidateForm({
         </section>
         {!!election.hasVice && (
           <section>
-            <h3>Vice-prefeito</h3>
-            <Field label="Nome do vice-prefeito">
+            <h3>Vice</h3>
+            <Field label="Nome do vice">
               <input
                 required
                 maxLength={160}
@@ -350,7 +350,7 @@ function CandidateForm({
               />
             </Field>
             <Photo
-              label="Foto do vice-prefeito"
+              label="Foto do vice"
               value={v.viceImage}
               onChange={(s) => change('viceImage', s)}
               upload={upload}
@@ -379,7 +379,15 @@ function CandidateForm({
     </form>
   );
 }
-/** Exibe prévia antes de importar o cadastro geral usado pelas eleições. */
+type ImportSummary = { added: number; updated: number; unchanged: number; reactivated: number };
+type ImportStudent = Student & { change: keyof ImportSummary };
+const importLabels: Record<keyof ImportSummary, string> = {
+  added: 'Novo',
+  updated: 'Atualizar',
+  unchanged: 'Sem alteração',
+  reactivated: 'Reativar',
+};
+/** Exibe a comparação com o cadastro geral e o resultado real após confirmar. */
 function CsvImport({
   busy,
   action,
@@ -389,37 +397,51 @@ function CsvImport({
   action: (name: string, payload: any) => Promise<any>;
   onDone: () => void;
 }) {
-  const [csv, setCsv] = useState(''),
-    [rows, setRows] = useState<Student[] | null>(null),
-    [error, setError] = useState('');
+  const [csv, setCsv] = useState('');
+  const [rows, setRows] = useState<ImportStudent[] | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [result, setResult] = useState<ImportSummary | null>(null);
+  const [filename, setFilename] = useState('');
+  const [error, setError] = useState(''),
+    [reading, setReading] = useState(false);
   return (
     <div className="simple-import">
       <div className="simple-inline">
         <label className="button secondary">
           <Upload size={17} />
-          Escolher arquivo CSV
+          {reading ? 'Lendo arquivo…' : 'Escolher arquivo CSV'}
           <input
             hidden
             type="file"
             aria-label="Arquivo CSV de alunos"
             accept=".csv,text/csv"
-            disabled={busy}
+            disabled={busy || reading}
             onChange={async (ev) => {
-              const f = ev.target.files?.[0];
-              if (!f) return;
+              const file = ev.target.files?.[0];
+              ev.target.value = '';
+              if (!file) return;
               setError('');
               setRows(null);
-              if (f.size > 1500000) {
+              setSummary(null);
+              setResult(null);
+              setCsv('');
+              setFilename('');
+              if (file.size > 1500000) {
                 setError('Use um arquivo de até 1,5 MB.');
                 return;
               }
+              setReading(true);
               try {
-                const content = await f.text();
-                const result = await action('csvPreview', { csv: content });
+                const content = await file.text();
+                const plan = await action('csvPreview', { csv: content });
                 setCsv(content);
-                setRows(result.rows);
+                setFilename(file.name);
+                setRows(plan.rows);
+                setSummary(plan.summary);
               } catch (err: any) {
                 setError(err.message);
+              } finally {
+                setReading(false);
               }
             }}
           />
@@ -439,21 +461,53 @@ function CsvImport({
         </button>
       </div>
       <p className="simple-hint">
-        Importe todas as turmas no mesmo CSV, com as colunas nome, turma e matricula. Os alunos já
-        cadastrados são atualizados pela matrícula.
+        Use as colunas nome, turma e matricula. Cada matrícula identifica um aluno: nome e turma são
+        atualizados, e os novos alunos são adicionados. Mantenha os zeros à esquerda.
+      </p>
+      <p className="simple-hint">
+        Alunos ausentes do arquivo continuam no cadastro. As listas das eleições já publicadas são
+        preservadas.
       </p>
       {error && (
         <div className="error-banner" role="alert">
           {error}
         </div>
       )}
-      {rows && (
-        <>
+      {result && (
+        <div className="info-banner import-result" role="status">
+          <strong>Cadastro atualizado sem duplicar matrículas.</strong>
           <p>
-            <strong>
-              {rows.length} alunos em {new Set(rows.map((r) => r.className)).size} turmas
-            </strong>
+            {result.added} {result.added === 1 ? 'novo' : 'novos'} · {result.updated}{' '}
+            {result.updated === 1 ? 'atualizado' : 'atualizados'} · {result.unchanged} sem alteração
+            · {result.reactivated} {result.reactivated === 1 ? 'reativado' : 'reativados'}
           </p>
+        </div>
+      )}
+      {rows && summary && (
+        <>
+          <div className="import-file-heading">
+            <strong>{filename}</strong>
+            <span>
+              {rows.length} {rows.length === 1 ? 'aluno' : 'alunos'} ·{' '}
+              {new Set(rows.map((r) => r.className)).size}{' '}
+              {new Set(rows.map((r) => r.className)).size === 1 ? 'turma' : 'turmas'}
+            </span>
+          </div>
+          <div className="import-summary" aria-label="Comparação com o cadastro">
+            {(
+              [
+                ['added', 'Novos'],
+                ['updated', 'A atualizar'],
+                ['unchanged', 'Sem alteração'],
+                ['reactivated', 'A reativar'],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key}>
+                <strong>{summary[key]}</strong>
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
           <div className="table-scroll">
             <table>
               <thead>
@@ -461,28 +515,48 @@ function CsvImport({
                   <th>Nome</th>
                   <th>Turma</th>
                   <th>Matrícula</th>
+                  <th>Situação</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 5).map((s) => (
-                  <tr key={s.matricula}>
-                    <td>{s.name}</td>
-                    <td>{s.className}</td>
-                    <td>{s.matricula}</td>
+                {rows.slice(0, 5).map((row) => (
+                  <tr key={row.matricula}>
+                    <td>{row.name}</td>
+                    <td>{row.className}</td>
+                    <td>{row.matricula}</td>
+                    <td>
+                      <Badge
+                        tone={
+                          row.change === 'added'
+                            ? 'green'
+                            : row.change === 'unchanged'
+                              ? 'neutral'
+                              : 'blue'
+                        }
+                      >
+                        {importLabels[row.change]}
+                      </Badge>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="simple-hint">
+            {rows.length > 5 ? 'Prévia dos primeiros 5 alunos. ' : ''}O cadastro será conferido
+            novamente ao confirmar a importação.
+          </p>
           <button
             type="button"
             className="button primary"
-            disabled={busy}
+            disabled={busy || reading}
             onClick={async () => {
               setError('');
               try {
-                await action('csvImport', { csv });
+                const done = await action('csvImport', { csv });
+                setResult(done.summary);
                 setRows(null);
+                setSummary(null);
                 setCsv('');
                 onDone();
               } catch (err: any) {
@@ -490,7 +564,7 @@ function CsvImport({
               }
             }}
           >
-            {busy ? 'Importando…' : 'Confirmar importação'}
+            {busy ? 'Atualizando cadastro…' : 'Confirmar atualização'}
           </button>
         </>
       )}
@@ -754,7 +828,7 @@ export default function App() {
     await attempt(async () => {
       const r = await action('election', {
         value: {
-          name: 'Exemplo · 6 chapas de prefeito e vice',
+          name: 'Exemplo · 6 chapas de candidato e vice',
           digits: 5,
           hasVice: 1,
           requireMatricula: 1,
@@ -951,7 +1025,7 @@ export default function App() {
                           ? 'Sobre a eleição'
                           : step === 1
                             ? e?.hasVice
-                              ? 'Cadastre prefeito e vice'
+                              ? 'Cadastre candidato e vice'
                               : 'Cadastre os candidatos'
                             : step === 2
                               ? 'Quem pode votar?'
@@ -1160,7 +1234,7 @@ export default function App() {
                         <div className="simple-review">
                           <strong>
                             {e.candidates.filter((c) => c.active).length}{' '}
-                            {e.hasVice ? 'chapas de prefeito e vice' : 'candidatos'}
+                            {e.hasVice ? 'chapas de candidato e vice' : 'candidatos'}
                           </strong>
                           <span>
                             {e.requireMatricula
@@ -1367,7 +1441,7 @@ export default function App() {
                   {publishedTab === 'candidates' && (
                     <section className="clean-detail-panel">
                       <div className="clean-detail-heading">
-                        <h2>{e.hasVice ? 'Prefeito e vice' : 'Candidatos'}</h2>
+                        <h2>{e.hasVice ? 'Candidato e vice' : 'Candidatos'}</h2>
                       </div>
                       <CandidateList election={e} />
                     </section>
@@ -1570,7 +1644,7 @@ export default function App() {
         )}
         {modal?.kind === 'candidate' && e && (
           <Modal
-            title={e.hasVice ? 'Prefeito e vice' : 'Candidato'}
+            title={e.hasVice ? 'Candidato e vice' : 'Candidato'}
             wide
             onClose={() => !busy && setModal(null)}
           >

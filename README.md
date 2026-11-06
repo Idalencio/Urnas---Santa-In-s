@@ -41,7 +41,7 @@ são separados.
 4. A matrícula libera uma participação por eleição. O voto é gravado sem identificação do aluno.
 5. Participação e voto são confirmados juntos; reenvios e confirmações simultâneas não duplicam o voto.
 
-As chapas aceitam número completo, sem prefixo fixo, nome e foto de prefeito e vice.
+As chapas aceitam número completo, sem prefixo fixo, nome e foto de candidato e vice.
 O vice é opcional por eleição. Excluir aluno retira o cadastro ativo e preserva
 as listas e os votos das eleições já configuradas.
 

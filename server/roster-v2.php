@@ -44,6 +44,52 @@ function v2RosterTransaction(callable $fn): mixed
         sql('SELECT RELEASE_LOCK(?)', [$key]);
     }
 }
+/** Compara a matrícula inteira; nomes iguais não identificam a mesma pessoa. */
+function v2CsvPlan(array $incoming, array $existing): array
+{
+    $byMatricula = array_column($existing, null, 'matricula');
+    $summary = ['added' => 0, 'updated' => 0, 'unchanged' => 0, 'reactivated' => 0];
+    $rows = [];
+    foreach ($incoming as $student) {
+        $student['className'] = v2CanonicalClass($student['className']);
+        $old = $byMatricula[$student['matricula']] ?? null;
+        $change = !$old
+            ? 'added'
+            : ((int) $old['active'] === 0
+                ? 'reactivated'
+                : ($old['name'] !== $student['name'] || $old['className'] !== $student['className']
+                    ? 'updated'
+                    : 'unchanged'));
+        $summary[$change]++;
+        $rows[] = $student + ['change' => $change];
+    }
+    return ['rows' => $rows, 'count' => count($rows), 'summary' => $summary];
+}
+function v2CsvPreview(array $incoming): array
+{
+    return v2CsvPlan(
+        $incoming,
+        all('SELECT matricula,name,class_name AS className,active FROM v2_students'),
+    );
+}
+/** Refaz a comparação sob trava; a prévia nunca decide o resultado da gravação. */
+function v2ImportCsv(array $incoming): array
+{
+    return v2RosterTransaction(function () use ($incoming) {
+        $plan = v2CsvPreview($incoming);
+        foreach ($plan['rows'] as $student) {
+            if ($student['change'] === 'unchanged') {
+                continue;
+            }
+            // A PK da matrícula e o upsert impedem duplicação também no banco.
+            sql(
+                'INSERT INTO v2_students (matricula,name,class_name,active) VALUES (?,?,?,1) ON DUPLICATE KEY UPDATE name=VALUES(name),class_name=VALUES(class_name),active=1',
+                [$student['matricula'], $student['name'], $student['className']],
+            );
+        }
+        return ['ok' => true, 'count' => $plan['count'], 'summary' => $plan['summary']];
+    });
+}
 /** Edita o cadastro geral; mantém a identidade quando a matrícula já é eleitora. */
 function v2SaveStudent(array $v): array
 {

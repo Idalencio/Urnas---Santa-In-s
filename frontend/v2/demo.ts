@@ -18,7 +18,7 @@ export function previewElection(source?: Election, candidates?: Candidate[]): El
   return {
     ...source,
     id: source?.id || 'exemplo',
-    name: source?.name || 'Prefeito e vice · 6 chapas de exemplo',
+    name: source?.name || 'Candidato e vice · 6 chapas de exemplo',
     startsAt: new Date(Date.now() - 60000).toISOString(),
     endsAt: new Date(Date.now() + 86400000).toISOString(),
     closed: 0,

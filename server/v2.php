@@ -269,7 +269,7 @@ function v2SaveElection(array $v, array $me): string
     });
     return $id;
 }
-/** Número é único por eleição; prefeito e vice são salvos na mesma chapa. */
+/** Número é único por eleição; candidato e vice são salvos na mesma chapa. */
 function v2SaveCandidate(array $v): void
 {
     $eid = clean($v['electionId'] ?? '');
@@ -497,7 +497,7 @@ function v2Publish(array $b): void
             foreach ($candidates as $c) {
                 if (!$c['image'] || ($e['hasVice'] && !$c['viceImage'])) {
                     fail(
-                        'Complete as fotos do prefeito e do vice da chapa número ' .
+                        'Complete as fotos do candidato e do vice da chapa número ' .
                             $c['code'] .
                             '.',
                     );
@@ -803,19 +803,9 @@ function v2App(): never
         case 'image':
             reply(['image' => storeImageData($b['imageData'] ?? null)]);
         case 'csvPreview':
-            $students = v2Csv($b['csv'] ?? '');
-            reply(['rows' => $students, 'count' => count($students)]);
+            reply(v2CsvPreview(v2Csv($b['csv'] ?? '')));
         case 'csvImport':
-            $students = v2Csv($b['csv'] ?? '');
-            v2RosterTransaction(function () use ($students) {
-                foreach ($students as $s) {
-                    sql(
-                        'INSERT INTO v2_students (matricula,name,class_name,active) VALUES (?,?,?,1) ON DUPLICATE KEY UPDATE name=VALUES(name),class_name=VALUES(class_name),active=1',
-                        [$s['matricula'], $s['name'], v2CanonicalClass($s['className'])],
-                    );
-                }
-            });
-            reply(['ok' => true, 'count' => count($students)]);
+            reply(v2ImportCsv(v2Csv($b['csv'] ?? '')));
         case 'enroll':
             v2Enroll($b, $me);
             break;

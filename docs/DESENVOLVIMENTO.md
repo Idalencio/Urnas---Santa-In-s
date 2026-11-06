@@ -66,8 +66,8 @@ Variáveis aceitas: `URNA_TEST_DB_HOST` (padrão `127.0.0.1`), `URNA_TEST_DB_POR
 `URNA_TEST_PHP` (padrão `php`, executável PHP local). Não execute os testes contra
 um serviço de banco de produção, mesmo que esteja no mesmo computador.
 
-As três suites verificam voto e urnas compartilhadas, permissões da equipe e gestão
-manual/exclusão de alunos. Os dados e as senhas são fictícios. O runner também valida
+As suites verificam voto e urnas compartilhadas, permissões da equipe, gestão
+manual/exclusão de alunos, exclusão de rascunhos e importação comparada por matrícula. Os dados e as senhas são fictícios. O runner também valida
 a criação da credencial inicial sem exibir senha nem sobrescrever arquivo existente.
 
 O workflow `.github/workflows/validar.yml` repete os checks e testes em um MariaDB

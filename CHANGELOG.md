@@ -1,5 +1,18 @@
 # Histórico de alterações
 
+## 06/11/2026 — candidato e vice; importação comparada por matrícula
+
+- Nomenclatura genérica no cadastro, nas fotos, nos exemplos e nos dois modelos de urna.
+- Prévia CSV compara novos alunos, alterações de nome/turma, cadastros iguais e reativações.
+- Confirmação repete a comparação na transação e informa o resultado real, sem duplicar matrícula.
+- Matrículas repetidas no mesmo arquivo são recusadas antes da gravação; zeros são preservados.
+- Cadastro geral e eleitorados publicados permanecem independentes.
+- Testes cobrem arquivo repetido, prévia antiga e duas importações simultâneas.
+
+Validação: 218 verificações HTTP PHP em MariaDB local descartável e 193 verificações
+no adaptador D1, tipos das interfaces e do projeto hospedado, sintaxe PHP, builds e
+formatação. Conferência de interface em navegador com arquivo e alunos fictícios.
+
 ## 05/11/2026 — identidade visual e acabamento do painel
 
 - Cabeçalho no azul do colégio, logo preservada e destaque dourado na navegação.
