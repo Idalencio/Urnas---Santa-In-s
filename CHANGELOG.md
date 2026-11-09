@@ -74,3 +74,10 @@ As regras e tabelas de votação, as permissões e os dados existentes foram pre
 
 Validação: tipos das interfaces, build V2, sintaxe PHP, 184 verificações HTTP PHP,
 157 verificações no adaptador e validação da criação/preservação da credencial inicial.
+
+## 2026-11-09 · Segurança administrativa
+
+- Atualiza dependências da prévia e da interface, com auditoria automática no CI.
+- Adiciona TOTP, códigos de recuperação de uso único, proteção das alterações de senha e revogação de sessões.
+- Acrescenta histórico administrativo restrito, filtros e registros atômicos com as alterações.
+- Inclui recuperação de MFA pelo console PHP e testes de segurança nos dois adaptadores.

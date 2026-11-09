@@ -115,16 +115,36 @@ async function load() {
   return { s: JSON.parse(r.value), revision: r.revision, raw: r.value };
 }
 /** Compare-and-swap: repete a leitura se outra escrita mudou a revisão do estado. */
-async function mutate(fn: (s: any) => any) {
+async function mutate(fn: (s: any) => any, audit?: any) {
   for (let i = 0; i < 15; i++) {
     const { s, revision, raw } = await load();
-    const result = fn(s);
+    const result = await fn(s);
     const value = JSON.stringify(s);
-    if (value === raw) return result;
-    const r = await DB()
+    if (value === raw && !audit) return result;
+    const update = DB()
       .prepare("UPDATE demo_state SET value=?,revision=revision+1 WHERE id='main' AND revision=?")
-      .bind(value, revision)
-      .run();
+      .bind(value, revision);
+    let r: any;
+    if (audit) {
+      const event = typeof audit === 'function' ? audit(result) : audit;
+      const insert = DB()
+        .prepare(
+          'INSERT INTO admin_audit (id,occurred_at,actor_id,actor_name,action,target_type,target_id,election_id,details) SELECT ?,?,?,?,?,?,?,?,? WHERE changes()=1',
+        )
+        .bind(
+          uuid(),
+          date(),
+          event.me.id,
+          event.me.name,
+          event.action,
+          event.type || 'account',
+          event.id || '',
+          event.electionId || '',
+          JSON.stringify(event.details || {}),
+        );
+      // D1.batch é uma transação. Só o vencedor do CAS grava o evento.
+      [r] = await DB().batch([update, insert]);
+    } else r = await update.run();
     if (r.meta.changes === 1) return result;
   }
   fail('Há outra operação em andamento. Tente novamente.', 409);
@@ -210,17 +230,17 @@ async function seed() {
     .bind(JSON.stringify(state))
     .run();
 }
-async function throttle(id: string) {
+async function throttle(id: string, limit = 45, duration = 60000) {
   const now = Date.now();
   const k = await hash(id);
   await DB()
     .prepare(
       'INSERT INTO demo_limits (id,attempts,until) VALUES (?,1,?) ON CONFLICT(id) DO UPDATE SET attempts=CASE WHEN until<? THEN 1 ELSE attempts+1 END,until=CASE WHEN until<? THEN ? ELSE until END',
     )
-    .bind(k, now + 60000, now, now, now + 60000)
+    .bind(k, now + duration, now, now, now + duration)
     .run();
   const r = await DB().prepare('SELECT attempts FROM demo_limits WHERE id=?').bind(k).first<any>();
-  if (r.attempts > 45) fail('Muitas tentativas. Aguarde um minuto.', 429);
+  if (r.attempts > limit) fail('Muitas tentativas. Aguarde alguns minutos.', 429);
 }
 const PERMISSIONS = ['manageElections', 'manageVoters', 'publishElections', 'viewResults'];
 function account(s: any, id: string) {
@@ -323,6 +343,7 @@ function profile(a: any, s: any) {
     role: a.role,
     active: a.active,
     owner: a.owner || 0,
+    mfaEnabled: !!s.mfa?.[a.id]?.enabled,
     permissions: a.role === 'admin' ? PERMISSIONS : a.permissions || [],
     classes:
       a.role === 'admin'
@@ -706,7 +727,11 @@ async function admin(req: Request, b: any) {
       fail('Use uma senha com 10 a 128 caracteres.');
     preparedHash = await passHash(v.password);
   }
-  if (action === 'image') return json(await upload(b));
+  if (action === 'image') {
+    const image = await upload(b);
+    await mutate(() => ({ ok: true }), adminEvent(me, action, b));
+    return json(image);
+  }
   if (action === 'csvPreview') {
     return json(csvPlan(snapshot, csvRows(b.csv)));
   }
@@ -725,259 +750,268 @@ async function admin(req: Request, b: any) {
     });
   }
   const students = action === 'csvImport' ? csvRows(b.csv) : null;
-  const result = await mutate((s) => {
-    const current = profile(account(s, me.id), s);
-    access(s, current, action, b);
-    if (action === 'student') return saveStudent(s, v);
-    if (action === 'deleteStudent') return deleteStudent(s, b);
-    if (action === 'renameClass') return renameClass(s, b);
-    if (action === 'account') return saveAccount(s, current, v, preparedHash);
-    if (action === 'election') {
-      const name = clean(v.name),
-        digits = Number(v.digits);
-      if (!name || !Number.isInteger(digits) || digits < 1 || digits > 5)
-        fail('Informe nome e limite de 1 a 5 dígitos.');
-      if (v.id) {
-        const e = draft(s, v.id);
-        if (e.candidates.some((c: any) => c.code.length > digits))
-          fail('Um candidato excede o limite escolhido.');
-        Object.assign(e, {
+  const result = await mutate(
+    (s) => {
+      const current = profile(account(s, me.id), s);
+      access(s, current, action, b);
+      if (action === 'student') return saveStudent(s, v);
+      if (action === 'deleteStudent') return deleteStudent(s, b);
+      if (action === 'renameClass') return renameClass(s, b);
+      if (action === 'account') return saveAccount(s, current, v, preparedHash);
+      if (action === 'election') {
+        const name = clean(v.name),
+          digits = Number(v.digits);
+        if (!name || !Number.isInteger(digits) || digits < 1 || digits > 5)
+          fail('Informe nome e limite de 1 a 5 dígitos.');
+        if (v.id) {
+          const e = draft(s, v.id);
+          if (e.candidates.some((c: any) => c.code.length > digits))
+            fail('Um candidato excede o limite escolhido.');
+          Object.assign(e, {
+            name,
+            digits,
+            hasVice: v.hasVice ? 1 : 0,
+            requireMatricula: v.requireMatricula ? 1 : 0,
+          });
+          return { ok: true, id: e.id };
+        }
+        const id = uuid();
+        s.elections.push({
+          id,
+          ownerId: me.id,
           name,
           digits,
           hasVice: v.hasVice ? 1 : 0,
           requireMatricula: v.requireMatricula ? 1 : 0,
+          published: 0,
+          closed: 0,
+          startsAt: null,
+          endsAt: null,
+          candidateSnapshot: [],
+          candidates: [],
         });
-        return { ok: true, id: e.id };
+        return { ok: true, id };
       }
-      const id = uuid();
-      s.elections.push({
-        id,
-        ownerId: me.id,
-        name,
-        digits,
-        hasVice: v.hasVice ? 1 : 0,
-        requireMatricula: v.requireMatricula ? 1 : 0,
-        published: 0,
-        closed: 0,
-        startsAt: null,
-        endsAt: null,
-        candidateSnapshot: [],
-        candidates: [],
-      });
-      return { ok: true, id };
-    }
-    if (action === 'deleteElection') {
-      const e = election(s, b.electionId);
-      if (e.published || e.closed) fail('Somente eleições em preparação podem ser excluídas.', 409);
-      if (
-        s.ballots.some((vote: any) => vote.electionId === e.id) ||
-        (s.electors[e.id] || []).some((voter: any) => voter.voted)
-      ) {
-        fail('Esta eleição possui registros de votação e não pode ser excluída.', 409);
-      }
-      // A mutação com revisão torna exclusão e publicação concorrentes incompatíveis.
-      s.elections = s.elections.filter((item: any) => item.id !== e.id);
-      delete s.electors[e.id];
-      if (s.electionTerminalLinks) delete s.electionTerminalLinks[e.id];
-      for (const terminal of s.terminals)
-        if (terminal.electionId === e.id) terminal.electionId = null;
-      for (const account of s.accounts || [])
-        account.electionIds = (account.electionIds || []).filter((id: string) => id !== e.id);
-      return { ok: true };
-    }
-    if (action === 'candidate') {
-      const e = draft(s, v.electionId),
-        name = clean(v.name),
-        code = clean(v.code, 6),
-        image = clean(v.image, 250),
-        viceName = clean(v.viceName),
-        viceImage = clean(v.viceImage, 250);
-      if (!name || !/^(0|[1-9][0-9]{0,4})$/.test(code) || code.length > e.digits)
-        fail('Informe nome e número válido, sem zero automático.');
-      if (e.hasVice && !viceName) fail('Informe o vice.');
-      if (!validImage(image) || !validImage(viceImage)) fail('Imagem inválida.');
-      if (e.candidates.some((c: any) => c.code === code && c.id !== v.id))
-        fail('Número já cadastrado nesta eleição.');
-      const c = {
-        id: v.id || uuid(),
-        electionId: e.id,
-        name,
-        code,
-        image,
-        viceName: e.hasVice ? viceName : '',
-        viceImage: e.hasVice ? viceImage : '',
-        active: v.active ? 1 : 0,
-      };
-      if (v.id) {
-        const i = e.candidates.findIndex((x: any) => x.id === v.id);
-        if (i < 0) fail('Candidato não pertence à eleição.');
-        e.candidates[i] = c;
-      } else e.candidates.push(c);
-      return { ok: true };
-    }
-    if (action === 'csvImport') {
-      // Recalculado em cada tentativa CAS, incluindo importações concorrentes.
-      const plan = csvPlan(s, students!);
-      const byMatricula = new Map<string, any>(
-        s.students.map((student: any) => [student.matricula, student]),
-      );
-      for (const row of plan.rows) {
-        if (row.change === 'unchanged') continue;
-        const value = {
-          matricula: row.matricula,
-          name: row.name,
-          className: row.className,
-          active: 1,
-        };
-        const old = byMatricula.get(row.matricula);
-        if (old) Object.assign(old, value);
-        else {
-          s.students.push(value);
-          byMatricula.set(value.matricula, value);
+      if (action === 'deleteElection') {
+        const e = election(s, b.electionId);
+        if (e.published || e.closed)
+          fail('Somente eleições em preparação podem ser excluídas.', 409);
+        if (
+          s.ballots.some((vote: any) => vote.electionId === e.id) ||
+          (s.electors[e.id] || []).some((voter: any) => voter.voted)
+        ) {
+          fail('Esta eleição possui registros de votação e não pode ser excluída.', 409);
         }
+        // A mutação com revisão torna exclusão e publicação concorrentes incompatíveis.
+        s.elections = s.elections.filter((item: any) => item.id !== e.id);
+        delete s.electors[e.id];
+        if (s.electionTerminalLinks) delete s.electionTerminalLinks[e.id];
+        for (const terminal of s.terminals)
+          if (terminal.electionId === e.id) terminal.electionId = null;
+        for (const account of s.accounts || [])
+          account.electionIds = (account.electionIds || []).filter((id: string) => id !== e.id);
+        return { ok: true };
       }
-      return { ok: true, count: plan.count, summary: plan.summary };
-    }
-    if (action === 'enroll') {
-      const e = draft(s, b.electionId),
-        classes = b.classes || [];
-      if (
-        !Array.isArray(classes) ||
-        classes.length > 500 ||
-        classes.some((c: any) => typeof c !== 'string')
-      )
-        fail('Selecione as turmas.');
-      if (
-        current.role !== 'admin' &&
-        (!classes.length || classes.some((c: string) => !classAllowed(current, c, s)))
-      )
-        fail('Selecione apenas as turmas liberadas para sua conta.', 403);
-      const resolved = classes.map((c: string) => canonicalClass(s, c));
-      const rows = activeStudents(s).filter(
-        (r: any) => !resolved.length || resolved.includes(r.className),
-      );
-      if (!rows.length) fail('Não há alunos nas turmas selecionadas.');
-      s.electors[e.id] = rows.map((r: any) => ({
-        ...r,
-        voted: 0,
-        gateHash: null,
-        expires: 0,
-        terminalId: null,
-      }));
-      return { ok: true };
-    }
-    if (action === 'terminal') {
-      const id = v.id || uuid(),
-        old = s.terminals.find((t: any) => t.id === id),
-        name = clean(v.name);
-      if (!name || !['standard', 'images'].includes(v.model)) fail('Informe nome e modelo.');
-      if (
-        old?.electionId &&
-        ['active', 'scheduled'].includes(status(election(s, old.electionId))) &&
-        (old.electionId !== (v.electionId || null) || old.model !== v.model)
-      )
-        fail('Encerre a eleição antes de trocar a urna.');
-      const e = v.electionId ? election(s, v.electionId) : null;
-      if (
-        e?.published &&
-        v.model === 'images' &&
-        e.candidateSnapshot.some((c: any) => !c.image || (e.hasVice && !c.viceImage))
-      )
-        fail('Esta eleição exige fotos dos candidatos e dos vices.');
-      const t = {
-        id,
-        name,
-        location: clean(v.location),
-        model: v.model,
-        electionId: v.electionId || null,
-      };
-      if (old) Object.assign(old, t);
-      else s.terminals.push(t);
-      return { ok: true };
-    }
-    if (action === 'publish') {
-      const e = draft(s, b.electionId);
-      const start = new Date(b.startsAt),
-        end = new Date(b.endsAt);
-      if (!Number.isFinite(+start) || !Number.isFinite(+end) || end <= start || +end <= Date.now())
-        fail('Confira o período.');
-      const candidates = e.candidates
-        .filter((c: any) => c.active)
-        .map((c: any) => ({
-          ...c,
-          viceName: e.hasVice ? c.viceName : '',
-          viceImage: e.hasVice ? c.viceImage : '',
-        }));
-      if (!candidates.length || (e.hasVice && candidates.some((c: any) => !c.viceName)))
-        fail('Confira os candidatos e vices.');
-      if (e.requireMatricula && !(s.electors[e.id] || []).length)
-        fail('Selecione os eleitores desta eleição.');
-      const terms = electionTerminals(s, e.id),
-        models = b.models;
-      if (
-        models !== undefined &&
-        (!Array.isArray(models) ||
-          !models.length ||
-          models.length > 2 ||
-          new Set(models).size !== models.length ||
-          models.some((m: any) => !['standard', 'images'].includes(m)))
-      )
-        fail('Escolha a urna com teclado, por imagens ou as duas.');
-      const chosen = models || [...new Set(terms.map((t: any) => t.model))];
-      if (!chosen.length) fail('Escolha uma urna antes de publicar.');
-      if (chosen.includes('images')) {
-        const missing = candidates.find((c: any) => !c.image || (e.hasVice && !c.viceImage));
-        if (missing)
-          fail('Complete as fotos do candidato e do vice da chapa número ' + missing.code + '.');
+      if (action === 'candidate') {
+        const e = draft(s, v.electionId),
+          name = clean(v.name),
+          code = clean(v.code, 6),
+          image = clean(v.image, 250),
+          viceName = clean(v.viceName),
+          viceImage = clean(v.viceImage, 250);
+        if (!name || !/^(0|[1-9][0-9]{0,4})$/.test(code) || code.length > e.digits)
+          fail('Informe nome e número válido, sem zero automático.');
+        if (e.hasVice && !viceName) fail('Informe o vice.');
+        if (!validImage(image) || !validImage(viceImage)) fail('Imagem inválida.');
+        if (e.candidates.some((c: any) => c.code === code && c.id !== v.id))
+          fail('Número já cadastrado nesta eleição.');
+        const c = {
+          id: v.id || uuid(),
+          electionId: e.id,
+          name,
+          code,
+          image,
+          viceName: e.hasVice ? viceName : '',
+          viceImage: e.hasVice ? viceImage : '',
+          active: v.active ? 1 : 0,
+        };
+        if (v.id) {
+          const i = e.candidates.findIndex((x: any) => x.id === v.id);
+          if (i < 0) fail('Candidato não pertence à eleição.');
+          e.candidates[i] = c;
+        } else e.candidates.push(c);
+        return { ok: true, id: c.id };
       }
-      if (models) {
-        s.electionTerminalLinks ||= {};
-        s.electionTerminalLinks[e.id] = models.map((model: string) =>
-          model === 'images' ? 'urna-infantil' : 'urna-padrao',
+      if (action === 'csvImport') {
+        // Recalculado em cada tentativa CAS, incluindo importações concorrentes.
+        const plan = csvPlan(s, students!);
+        const byMatricula = new Map<string, any>(
+          s.students.map((student: any) => [student.matricula, student]),
         );
-        for (const t of terms)
-          if (t.electionId === e.id && !models.includes(t.model)) t.electionId = null;
+        for (const row of plan.rows) {
+          if (row.change === 'unchanged') continue;
+          const value = {
+            matricula: row.matricula,
+            name: row.name,
+            className: row.className,
+            active: 1,
+          };
+          const old = byMatricula.get(row.matricula);
+          if (old) Object.assign(old, value);
+          else {
+            s.students.push(value);
+            byMatricula.set(value.matricula, value);
+          }
+        }
+        return { ok: true, count: plan.count, summary: plan.summary };
       }
-      Object.assign(e, {
-        published: 1,
-        startsAt: start.toISOString(),
-        endsAt: end.toISOString(),
-        candidateSnapshot: clone(candidates),
-      });
-      return { ok: true };
-    }
-    if (action === 'close') {
-      election(s, b.electionId).closed = 1;
-      for (const r of s.electors[b.electionId] || [])
-        Object.assign(r, { gateHash: null, expires: 0, terminalId: null });
-      return { ok: true };
-    }
-    if (action === 'unlock') {
-      election(s, b.electionId);
-      const r = (s.electors[b.electionId] || []).find((r: any) => r.matricula === b.matricula);
-      if (r && !classAllowed(current, r.className, s)) fail('Esta turma não foi liberada.', 403);
-      if (r && !r.voted) Object.assign(r, { gateHash: null, expires: 0, terminalId: null });
-      return { ok: true };
-    }
-    if (action === 'duplicate') {
-      const old = election(s, b.electionId),
-        id = uuid();
-      s.elections.push({
-        ...clone(old),
-        id,
-        ownerId: me.id,
-        name: (old.name + ' — cópia').slice(0, 160),
-        published: 0,
-        closed: 0,
-        startsAt: null,
-        endsAt: null,
-        candidateSnapshot: [],
-        candidates: old.candidates.map((c: any) => ({ ...c, id: uuid(), electionId: id })),
-      });
-      return { ok: true, id };
-    }
-    fail('Ação inválida.');
-  });
+      if (action === 'enroll') {
+        const e = draft(s, b.electionId),
+          classes = b.classes || [];
+        if (
+          !Array.isArray(classes) ||
+          classes.length > 500 ||
+          classes.some((c: any) => typeof c !== 'string')
+        )
+          fail('Selecione as turmas.');
+        if (
+          current.role !== 'admin' &&
+          (!classes.length || classes.some((c: string) => !classAllowed(current, c, s)))
+        )
+          fail('Selecione apenas as turmas liberadas para sua conta.', 403);
+        const resolved = classes.map((c: string) => canonicalClass(s, c));
+        const rows = activeStudents(s).filter(
+          (r: any) => !resolved.length || resolved.includes(r.className),
+        );
+        if (!rows.length) fail('Não há alunos nas turmas selecionadas.');
+        s.electors[e.id] = rows.map((r: any) => ({
+          ...r,
+          voted: 0,
+          gateHash: null,
+          expires: 0,
+          terminalId: null,
+        }));
+        return { ok: true };
+      }
+      if (action === 'terminal') {
+        const id = v.id || uuid(),
+          old = s.terminals.find((t: any) => t.id === id),
+          name = clean(v.name);
+        if (!name || !['standard', 'images'].includes(v.model)) fail('Informe nome e modelo.');
+        if (
+          old?.electionId &&
+          ['active', 'scheduled'].includes(status(election(s, old.electionId))) &&
+          (old.electionId !== (v.electionId || null) || old.model !== v.model)
+        )
+          fail('Encerre a eleição antes de trocar a urna.');
+        const e = v.electionId ? election(s, v.electionId) : null;
+        if (
+          e?.published &&
+          v.model === 'images' &&
+          e.candidateSnapshot.some((c: any) => !c.image || (e.hasVice && !c.viceImage))
+        )
+          fail('Esta eleição exige fotos dos candidatos e dos vices.');
+        const t = {
+          id,
+          name,
+          location: clean(v.location),
+          model: v.model,
+          electionId: v.electionId || null,
+        };
+        if (old) Object.assign(old, t);
+        else s.terminals.push(t);
+        return { ok: true, id };
+      }
+      if (action === 'publish') {
+        const e = draft(s, b.electionId);
+        const start = new Date(b.startsAt),
+          end = new Date(b.endsAt);
+        if (
+          !Number.isFinite(+start) ||
+          !Number.isFinite(+end) ||
+          end <= start ||
+          +end <= Date.now()
+        )
+          fail('Confira o período.');
+        const candidates = e.candidates
+          .filter((c: any) => c.active)
+          .map((c: any) => ({
+            ...c,
+            viceName: e.hasVice ? c.viceName : '',
+            viceImage: e.hasVice ? c.viceImage : '',
+          }));
+        if (!candidates.length || (e.hasVice && candidates.some((c: any) => !c.viceName)))
+          fail('Confira os candidatos e vices.');
+        if (e.requireMatricula && !(s.electors[e.id] || []).length)
+          fail('Selecione os eleitores desta eleição.');
+        const terms = electionTerminals(s, e.id),
+          models = b.models;
+        if (
+          models !== undefined &&
+          (!Array.isArray(models) ||
+            !models.length ||
+            models.length > 2 ||
+            new Set(models).size !== models.length ||
+            models.some((m: any) => !['standard', 'images'].includes(m)))
+        )
+          fail('Escolha a urna com teclado, por imagens ou as duas.');
+        const chosen = models || [...new Set(terms.map((t: any) => t.model))];
+        if (!chosen.length) fail('Escolha uma urna antes de publicar.');
+        if (chosen.includes('images')) {
+          const missing = candidates.find((c: any) => !c.image || (e.hasVice && !c.viceImage));
+          if (missing)
+            fail('Complete as fotos do candidato e do vice da chapa número ' + missing.code + '.');
+        }
+        if (models) {
+          s.electionTerminalLinks ||= {};
+          s.electionTerminalLinks[e.id] = models.map((model: string) =>
+            model === 'images' ? 'urna-infantil' : 'urna-padrao',
+          );
+          for (const t of terms)
+            if (t.electionId === e.id && !models.includes(t.model)) t.electionId = null;
+        }
+        Object.assign(e, {
+          published: 1,
+          startsAt: start.toISOString(),
+          endsAt: end.toISOString(),
+          candidateSnapshot: clone(candidates),
+        });
+        return { ok: true };
+      }
+      if (action === 'close') {
+        election(s, b.electionId).closed = 1;
+        for (const r of s.electors[b.electionId] || [])
+          Object.assign(r, { gateHash: null, expires: 0, terminalId: null });
+        return { ok: true };
+      }
+      if (action === 'unlock') {
+        election(s, b.electionId);
+        const r = (s.electors[b.electionId] || []).find((r: any) => r.matricula === b.matricula);
+        if (r && !classAllowed(current, r.className, s)) fail('Esta turma não foi liberada.', 403);
+        if (r && !r.voted) Object.assign(r, { gateHash: null, expires: 0, terminalId: null });
+        return { ok: true };
+      }
+      if (action === 'duplicate') {
+        const old = election(s, b.electionId),
+          id = uuid();
+        s.elections.push({
+          ...clone(old),
+          id,
+          ownerId: me.id,
+          name: (old.name + ' — cópia').slice(0, 160),
+          published: 0,
+          closed: 0,
+          startsAt: null,
+          endsAt: null,
+          candidateSnapshot: [],
+          candidates: old.candidates.map((c: any) => ({ ...c, id: uuid(), electionId: id })),
+        });
+        return { ok: true, id };
+      }
+      fail('Ação inválida.');
+    },
+    (r: any) => adminEvent(me, action, b, r),
+  );
   return json(result);
 }
 /** Votação do adaptador: a participação e o voto são atualizados no mesmo estado. */
@@ -1062,6 +1096,292 @@ async function publicTerminal(req: Request, id: string, b: any) {
   });
   return json(result);
 }
+/** O histórico guarda apenas identidade administrativa, alvo e totais; nunca votos ou segredos. */
+function adminEvent(me: any, action: string, b: any, result: any = {}) {
+  const v = b.value || {};
+  const types: any = {
+    election: 'election',
+    candidate: 'candidate',
+    terminal: 'terminal',
+    account: 'account',
+    student: 'student',
+    deleteStudent: 'student',
+    renameClass: 'class',
+    csvImport: 'roster',
+    image: 'image',
+  };
+  return {
+    me,
+    action,
+    type: types[action] || 'election',
+    id: clean(
+      result.id ||
+        result.matricula ||
+        v.id ||
+        v.originalMatricula ||
+        v.matricula ||
+        b.matricula ||
+        b.from ||
+        b.electionId,
+      160,
+    ),
+    electionId: clean(
+      b.electionId || v.electionId || (action === 'election' ? result.id || v.id : ''),
+      36,
+    ),
+    details: result.summary ? { summary: result.summary, count: result.count } : {},
+  };
+}
+async function auditEndpoint(req: Request) {
+  if (req.method !== 'GET') fail('Método não permitido.', 405);
+  const me = await user(req);
+  if (me.role !== 'admin') fail('Somente administradores podem consultar o histórico.', 403);
+  const p = new URL(req.url).searchParams,
+    where: string[] = [],
+    args: any[] = [];
+  for (const [key, column] of [
+    ['action', 'action'],
+    ['actor', 'actor_id'],
+    ['election', 'election_id'],
+  ]) {
+    const v = clean(p.get(key), 160);
+    if (v) {
+      where.push(column + '=?');
+      args.push(v);
+    }
+  }
+  for (const [key, op] of [
+    ['from', '>='],
+    ['to', '<='],
+  ]) {
+    const v = clean(p.get(key), 10);
+    if (v) {
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(v) ||
+        !Number.isFinite(Date.parse(v)) ||
+        new Date(v).toISOString().slice(0, 10) !== v
+      )
+        fail('Data inválida.');
+      where.push('occurred_at ' + op + ' ?');
+      args.push(v + (key === 'from' ? 'T00:00:00.000Z' : 'T23:59:59.999Z'));
+    }
+  }
+  const offset = Math.max(0, Math.min(1000000, Math.floor(Number(p.get('offset')) || 0))),
+    clause = where.length ? ' WHERE ' + where.join(' AND ') : '';
+  const total = await DB()
+    .prepare('SELECT COUNT(*) AS n FROM admin_audit' + clause)
+    .bind(...args)
+    .first<any>();
+  const result = await DB()
+    .prepare(
+      'SELECT id,occurred_at AS occurredAt,actor_id AS actorId,actor_name AS actorName,action,target_type AS targetType,target_id AS targetId,election_id AS electionId,details FROM admin_audit' +
+        clause +
+        ' ORDER BY occurred_at DESC,id DESC LIMIT 50 OFFSET ' +
+        offset,
+    )
+    .bind(...args)
+    .all<any>();
+  return json({
+    rows: result.results.map((r: any) => ({ ...r, details: JSON.parse(r.details) })),
+    total: total.n,
+    offset,
+    limit: 50,
+  });
+}
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32(bytes: Uint8Array) {
+  let buffer = 0,
+    bits = 0,
+    out = '';
+  for (const b of bytes) {
+    buffer = (buffer << 8) | b;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += B32[(buffer >>> bits) & 31];
+    }
+    buffer &= (1 << bits) - 1;
+  }
+  if (bits) out += B32[(buffer << (5 - bits)) & 31];
+  return out;
+}
+function unbase32(secret: string) {
+  let buffer = 0,
+    bits = 0;
+  const out = [];
+  for (const c of secret) {
+    const n = B32.indexOf(c);
+    if (n < 0) fail('Autenticador inválido.', 503);
+    buffer = (buffer << 5) | n;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((buffer >>> bits) & 255);
+    }
+    buffer &= (1 << bits) - 1;
+  }
+  return new Uint8Array(out);
+}
+async function totp(secret: string, step: number, digits = 6) {
+  const counter = new Uint8Array(8),
+    view = new DataView(counter.buffer);
+  view.setUint32(0, Math.floor(step / 4294967296));
+  view.setUint32(4, step >>> 0);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    unbase32(secret),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign'],
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, counter)),
+    offset = mac[19] & 15;
+  const value =
+    (((mac[offset] & 127) << 24) |
+      (mac[offset + 1] << 16) |
+      (mac[offset + 2] << 8) |
+      mac[offset + 3]) >>>
+    0;
+  return String(value % 10 ** digits).padStart(digits, '0');
+}
+async function mfaStep(secret: string, code: any, last = -1) {
+  if (typeof code !== 'string' || !/^\d{6}$/.test(code))
+    fail('Código inválido. Confira o autenticador ou use um código de recuperação.', 401);
+  const step = Math.floor(Date.now() / 30000);
+  for (const n of [step, step - 1, step + 1])
+    if (n > last && (await totp(secret, n)) === code) return n;
+  fail('Código inválido ou já utilizado. Aguarde o próximo código.', 401);
+}
+async function mfaKey() {
+  if (
+    typeof env.MFA_ENCRYPTION_KEY !== 'string' ||
+    !/^([a-f0-9]{64})$/.test(env.MFA_ENCRYPTION_KEY)
+  )
+    fail('Proteção em duas etapas indisponível. Procure a T.I.', 503);
+  const bytes = Uint8Array.from(env.MFA_ENCRYPTION_KEY.match(/../g), (s: any) => parseInt(s, 16));
+  return crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+async function encryptMfa(secret: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const out = new Uint8Array(
+    await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: enc.encode('urna-mfa-v1') },
+      await mfaKey(),
+      enc.encode(secret),
+    ),
+  );
+  return 'v1:' + btoa(String.fromCharCode(...iv, ...out));
+}
+async function decryptMfa(value: string) {
+  try {
+    const bytes = Uint8Array.from(atob(value.slice(3)), (c) => c.charCodeAt(0));
+    return new TextDecoder().decode(
+      await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: enc.encode('urna-mfa-v1') },
+        await mfaKey(),
+        bytes.slice(12),
+      ),
+    );
+  } catch {
+    fail('Autenticador indisponível. Procure a T.I.', 503);
+  }
+}
+async function consumeMfa(m: any, code: any) {
+  const normalized = typeof code === 'string' ? code.trim().toLowerCase().replace(/-/g, '') : '';
+  if (/^[a-f0-9]{32}$/.test(normalized)) {
+    const digest = await hash(normalized),
+      i = (m.recovery || []).indexOf(digest);
+    if (i < 0) fail('Código de recuperação inválido ou já utilizado.', 401);
+    m.recovery.splice(i, 1);
+  } else m.lastStep = await mfaStep(await decryptMfa(m.secret), code, m.lastStep ?? -1);
+}
+async function mfaAuth(req: Request, b: any) {
+  const me = await user(req),
+    { s } = await load(),
+    a = account(s, me.id),
+    action = b.action;
+  if (action === 'mfaStatus') {
+    const m = s.mfa?.[me.id];
+    return json({ enabled: !!m?.enabled, remaining: m?.recovery?.length || 0 });
+  }
+  await throttle('mfa-account:' + me.id, 8, 900000);
+  if (!(await verifyPass(b.currentPassword, a.password)))
+    fail('Sua senha atual está incorreta.', 401);
+  let secret = '',
+    encrypted = '',
+    codes: string[] = [],
+    hashes: string[] = [];
+  if (action === 'mfaBegin') {
+    secret = base32(crypto.getRandomValues(new Uint8Array(20)));
+    encrypted = await encryptMfa(secret);
+  }
+  if (['mfaConfirm', 'mfaRecovery'].includes(action)) {
+    codes = Array.from({ length: 10 }, () =>
+      [...crypto.getRandomValues(new Uint8Array(16))]
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .match(/.{8}/g)!
+        .join('-'),
+    );
+    hashes = await Promise.all(codes.map((c) => hash(c.replace(/-/g, ''))));
+  }
+  const panelHash = await hash(req.headers.get('x-urna-panel') || '');
+  const result = await mutate(
+    async (st) => {
+      const current = account(st, me.id);
+      if (current.authVersion !== a.authVersion) fail('Entre novamente.', 401);
+      st.mfa ||= {};
+      const m = (st.mfa[me.id] ||= { enabled: false, recovery: [], lastStep: -1 });
+      if (action === 'mfaBegin') {
+        if (m.enabled) fail('A proteção em duas etapas já está ativa.', 409);
+        m.pending = encrypted;
+        m.pendingUntil = Date.now() + 600000;
+        m.pendingPanel = panelHash;
+        return {
+          secret,
+          uri:
+            'otpauth://totp/' +
+            encodeURIComponent('Santa Inês:' + me.username) +
+            '?secret=' +
+            secret +
+            '&issuer=Santa%20In%C3%AAs&algorithm=SHA1&digits=6&period=30',
+        };
+      }
+      if (action === 'mfaConfirm') {
+        if (m.enabled || !m.pending || m.pendingUntil < Date.now() || m.pendingPanel !== panelHash)
+          fail('A configuração expirou. Inicie novamente.', 409);
+        m.lastStep = await mfaStep(await decryptMfa(m.pending), b.code);
+        m.enabled = true;
+        m.secret = m.pending;
+      } else if (['mfaDisable', 'mfaRecovery'].includes(action)) {
+        if (!m.enabled) fail('Ative a proteção em duas etapas primeiro.', 409);
+        await consumeMfa(m, b.code);
+      } else fail('Ação inválida.');
+      m.pending = null;
+      m.pendingUntil = 0;
+      m.pendingPanel = null;
+      m.recovery = hashes;
+      if (action === 'mfaDisable') {
+        m.enabled = false;
+        m.secret = null;
+        m.lastStep = -1;
+      }
+      const target = me.id === 'demo-admin' ? st : account(st, me.id);
+      target.authVersion++;
+      return { version: target.authVersion, enabled: m.enabled, remaining: hashes.length, codes };
+    },
+    { me, action, id: me.id },
+  );
+  if (action === 'mfaBegin') return json(result);
+  const response = await session(result.version, req, me.id),
+    data = (await response.json()) as any;
+  return json(
+    { ...data, enabled: result.enabled, remaining: result.remaining, codes: result.codes },
+    200,
+    { 'Set-Cookie': response.headers.get('Set-Cookie')! },
+  );
+}
+
 export async function endpoint(req: Request) {
   try {
     const path = new URL(req.url).pathname;
@@ -1091,8 +1411,19 @@ export async function endpoint(req: Request) {
             username === 'admin'
               ? account(s, 'demo-admin')
               : (s.accounts || []).find((a: any) => a.username === username && a.active);
+        await throttle('login-account:' + username, 12, 900000);
         if (!a || !(await verifyPass(b.password, a.password)))
           fail('Usuário ou senha incorretos.', 401);
+        const required = await mutate(async (st) => {
+          const current = account(st, a.id);
+          if (current.authVersion !== a.authVersion) fail('Entre novamente.', 401);
+          const m = st.mfa?.[a.id];
+          if (m?.enabled && !b.code) return true;
+          if (m?.enabled) await consumeMfa(m, b.code);
+          return false;
+        });
+        if (required) return json({ ok: true, mfaRequired: true });
+        await mutate(() => ({ ok: true }), { me: profile(a, s), action: 'login', id: a.id });
         return await session(a.authVersion, req, a.id);
       }
       if (b.action === 'logout') {
@@ -1114,6 +1445,7 @@ export async function endpoint(req: Request) {
           'Set-Cookie': '__Host-urna_demo=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0',
         });
       }
+      if (String(b.action).startsWith('mfa')) return await mfaAuth(req, b);
       if (b.action === 'password') {
         const me = await user(req),
           { s } = await load(),
@@ -1127,16 +1459,22 @@ export async function endpoint(req: Request) {
         )
           fail('Use senhas iguais, de 10 a 128 caracteres.');
         const password = await passHash(b.newPassword),
-          version = await mutate((st) => {
-            const target = me.id === 'demo-admin' ? st : account(st, me.id);
-            if (target.password !== a.password) fail('A senha foi alterada. Entre novamente.', 409);
-            target.password = password;
-            return ++target.authVersion;
-          });
+          version = await mutate(
+            async (st) => {
+              const target = me.id === 'demo-admin' ? st : account(st, me.id);
+              if (target.password !== a.password)
+                fail('A senha foi alterada. Entre novamente.', 409);
+              if (st.mfa?.[me.id]?.enabled) await consumeMfa(st.mfa[me.id], b.code);
+              target.password = password;
+              return ++target.authVersion;
+            },
+            { me, action: 'password', id: me.id },
+          );
         return await session(version, req, me.id);
       }
       fail('Ação inválida.');
     }
+    if (path === '/api/v2/audit') return await auditEndpoint(req);
     if (path === '/api/v2/tally') return await tally(req);
     if (path === '/api/v2/app') {
       if (req.method === 'GET') {

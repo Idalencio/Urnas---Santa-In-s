@@ -9,6 +9,7 @@ import {
   Menu,
   ChevronRight,
   BarChart3,
+  History,
 } from 'lucide-react';
 export function Shell({
   view,
@@ -35,7 +36,12 @@ export function Shell({
     ...(canResults ? [{ id: 'tally', label: 'Apuração', icon: BarChart3 }] : []),
     { id: 'terminals', label: 'Urnas', icon: Monitor },
     { id: 'students', label: 'Turmas', icon: Users },
-    ...(admin ? [{ id: 'team', label: 'Acessos', icon: ShieldCheck }] : []),
+    ...(admin
+      ? [
+          { id: 'team', label: 'Acessos', icon: ShieldCheck },
+          { id: 'audit', label: 'Histórico', icon: History },
+        ]
+      : []),
     { id: 'account', label: 'Conta', icon: Settings },
   ];
   useEffect(() => {

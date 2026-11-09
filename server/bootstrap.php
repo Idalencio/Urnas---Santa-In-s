@@ -115,7 +115,11 @@ function transaction(callable $fn): mixed
     db()->beginTransaction();
     try {
         $r = $fn();
+        $audited = function_exists(__NAMESPACE__ . '\\auditFlush') && auditFlush($r);
         db()->commit();
+        if ($audited) {
+            unset($GLOBALS['urna_audit']);
+        }
         return $r;
     } catch (Throwable $e) {
         if (db()->inTransaction()) {

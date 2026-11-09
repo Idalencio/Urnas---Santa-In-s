@@ -15,6 +15,9 @@ class Statement {
   bind(...args) {
     return new Statement(this.q, args);
   }
+  async all() {
+    return { results: sql.prepare(this.q).all(...this.args) };
+  }
   async first() {
     return sql.prepare(this.q).get(...this.args) || null;
   }
@@ -24,7 +27,21 @@ class Statement {
   }
 }
 globalThis.__DEMO_TEST_ENV = {
-  DB: { prepare: (q) => new Statement(q) },
+  DB: {
+    prepare: (q) => new Statement(q),
+    async batch(statements) {
+      sql.exec('BEGIN');
+      try {
+        const results = [];
+        for (const stmt of statements) results.push(await stmt.run());
+        sql.exec('COMMIT');
+        return results;
+      } catch (e) {
+        sql.exec('ROLLBACK');
+        throw e;
+      }
+    },
+  },
   DEMO_PASSWORD: 'SenhaFicticiaQA!42',
 };
 let source = readFileSync('lib/demo-api.ts', 'utf8')

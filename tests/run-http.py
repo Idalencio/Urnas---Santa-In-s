@@ -71,6 +71,7 @@ return [
     $pdo=new PDO('mysql:host='.$d['host'].';port='.$d['port'].';charset=utf8mb4',
       $d['user'],$d['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
     """
+    subprocess.run([PHP, str(ROOT / "tests/totp.php")], env=env, check=True)
     created = False
     server = None
     try:
@@ -119,8 +120,37 @@ return [
                     time.sleep(0.1)
             else:
                 raise RuntimeError("O servidor PHP local não respondeu.")
-            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py", "import-v2.py", "tally-v2.py"):
+            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py", "import-v2.py", "tally-v2.py", "security-v2.py"):
                 subprocess.run([os.sys.executable, str(ROOT / "tests" / suite)], env=env, check=True)
+        php(r"""
+        require 'server/bootstrap.php';require 'server/auth.php';require 'server/v2.php';require 'server/access-v2.php';require 'server/roster-v2.php';
+        $before=\Urna\one('SELECT COUNT(*) n FROM v2_students')['n'];
+        \Urna\db()->exec("CREATE TRIGGER reject_audit BEFORE INSERT ON admin_audit FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit unavailable'");
+        \Urna\auditPrepare(['id'=>'csi-admin-local','name'=>'QA'],'student',[],['matricula'=>'ROLLBACK001']);
+        $failed=false;
+        try{\Urna\v2SaveStudent(['name'=>'Não confirmar','matricula'=>'ROLLBACK001','className'=>'QA']);}catch(Throwable $e){$failed=true;}
+        if(!$failed || \Urna\one('SELECT COUNT(*) n FROM v2_students')['n']!==$before)throw new RuntimeException('Rollback do histórico falhou.');
+        unset($GLOBALS['urna_audit']);
+        \Urna\db()->exec('DROP TRIGGER reject_audit');
+        $secret=\Urna\mfaBase32(random_bytes(20));$encrypted=\Urna\mfaEncrypt($secret);
+        if(str_contains($encrypted,$secret) || \Urna\mfaDecrypt($encrypted)!==$secret)throw new RuntimeException('Criptografia MFA falhou.');
+        $failed=false;$raw=base64_decode(substr($encrypted,3));$raw[12]=chr(ord($raw[12])^1);
+        try{\Urna\mfaDecrypt('v1:'.base64_encode($raw));}catch(Throwable $e){$failed=true;}
+        if(!$failed)throw new RuntimeException('Integridade da cifra falhou.');
+        echo "OK Segurança de armazenamento: rollback real do histórico, cifragem e detecção de adulteração.\n";
+        """)
+        cancelled = subprocess.run([PHP,"bin/console.php","reset-mfa","admin"], cwd=qa, env=env,
+                                   input="CANCELAR\n", text=True, capture_output=True)
+        assert cancelled.returncode != 0, "Reset de MFA sem confirmação."
+        reset = subprocess.run([PHP,"bin/console.php","reset-mfa","admin"], cwd=qa, env=env,
+                               input="REDEFINIR\n", text=True, capture_output=True)
+        assert reset.returncode == 0, reset.stderr
+        php(r"""
+        require 'server/bootstrap.php';
+        if(!\Urna\one("SELECT id FROM admin_audit WHERE actor_id='console' AND action='mfaReset'"))throw new RuntimeException('Reset MFA sem histórico.');
+        if(\Urna\one("SELECT id FROM admin_sessions WHERE admin_id='csi-admin-local'"))throw new RuntimeException('Reset MFA não encerrou sessões.');
+        """)
+        print("OK Recuperação pelo console: confirmação, histórico e revogação de sessões.", flush=True)
         print("OK Suites HTTP concluídas em banco local descartável.", flush=True)
     finally:
         if server is not None:

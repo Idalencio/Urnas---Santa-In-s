@@ -190,10 +190,12 @@ function saveElection(array $v): void
         ) {
             fail('Já há uma eleição nessa urna durante o período escolhido.');
         }
+        $eid = uuid();
+        auditTarget($eid);
         sql(
             'INSERT INTO elections (id,name,terminal_id,starts_at,ends_at,closed,archived,candidate_snapshot,digits) VALUES (?,?,?,?,?,0,0,?,2)',
             [
-                uuid(),
+                $eid,
                 $name,
                 $tid,
                 $starts,

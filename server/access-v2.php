@@ -18,6 +18,7 @@ function v2Profile(array $a): array
         'role' => $a['role'],
         'active' => (int) $a['active'],
         'owner' => (int) $a['owner'],
+        'mfaEnabled' => (bool) (mfaRow($a['id'])['enabled'] ?? false),
         'permissions' => $admin ? V2_PERMISSIONS : json_decode($p['permissions'] ?? '[]', true),
         'classes' => $admin
             ? null
@@ -87,6 +88,7 @@ function v2SaveAccount(array $me, array $v): string
         fail('Somente administradores podem gerenciar acessos.', 403);
     }
     $id = clean($v['id'] ?? '') ?: uuid();
+    auditTarget($id);
     $name = clean($v['name'] ?? '');
     $username = strtolower(clean($v['username'] ?? '', 81));
     $role = $v['role'] ?? 'staff';

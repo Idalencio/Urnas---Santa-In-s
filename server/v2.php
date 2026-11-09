@@ -5,7 +5,7 @@ namespace Urna;
 /** Aplica somente migrações pendentes; mantém as tabelas e os votos anteriores. */
 function v2Schema(): void
 {
-    if (one("SELECT version FROM schema_migrations WHERE version='005_class_names.sql'")) {
+    if (one("SELECT version FROM schema_migrations WHERE version='006_security.sql'")) {
         return;
     }
     installSchema();
@@ -284,6 +284,7 @@ function v2State(array $me): array
 function v2SaveElection(array $v, array $me): string
 {
     $id = clean($v['id'] ?? '') ?: uuid();
+    auditTarget($id);
     $name = clean($v['name'] ?? '');
     $digits = (int) ($v['digits'] ?? 5);
     if (!$name || $digits < 1 || $digits > 5) {
@@ -334,6 +335,7 @@ function v2SaveCandidate(array $v): void
 {
     $eid = clean($v['electionId'] ?? '');
     $id = clean($v['id'] ?? '') ?: uuid();
+    auditTarget($id);
     $name = clean($v['name'] ?? '');
     $code = clean($v['code'] ?? '', 6);
     $image = clean($v['image'] ?? '', 250);
@@ -598,6 +600,7 @@ function v2Publish(array $b): void
 function v2SaveTerminal(array $v): void
 {
     $id = clean($v['id'] ?? '') ?: uuid();
+    auditTarget($id);
     $eid = clean($v['electionId'] ?? '');
     $name = clean($v['name'] ?? '');
     $model = $v['model'] ?? '';
@@ -839,6 +842,7 @@ function v2App(): never
     $action = $b['action'] ?? '';
     $v = is_array($b['value'] ?? null) ? $b['value'] : [];
     v2CheckAction($me, $action, $b, $v);
+    auditPrepare($me, $action, $b, $v);
     switch ($action) {
         case 'student':
             reply(['ok' => true] + v2SaveStudent($v));
@@ -861,7 +865,9 @@ function v2App(): never
             v2SaveTerminal($v);
             break;
         case 'image':
-            reply(['image' => storeImageData($b['imageData'] ?? null)]);
+            $image = storeImageData($b['imageData'] ?? null);
+            transaction(fn() => auditTarget(basename($image)));
+            reply(['image' => $image]);
         case 'csvPreview':
             reply(v2CsvPreview(v2Csv($b['csv'] ?? '')));
         case 'csvImport':
@@ -914,6 +920,7 @@ function v2App(): never
             $id = transaction(function () use ($b, $me) {
                 $e = v2Election(clean($b['electionId'] ?? ''), true);
                 $id = uuid();
+                auditTarget($id);
                 sql(
                     "INSERT INTO v2_elections (id,name,digits,has_vice,require_matricula,candidate_snapshot) VALUES (?,?,?,?,?,'[]')",
                     [

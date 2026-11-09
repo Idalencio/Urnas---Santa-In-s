@@ -81,3 +81,5 @@ O fluxo está documentado em [MANUTENCAO.md](docs/MANUTENCAO.md) e `AGENTS.md`.
 O envio ao GitHub não publica automaticamente no CloudPanel.
 
 Desenvolvido pela T.I.
+
+A proteção em duas etapas, o histórico administrativo e a recuperação pela T.I. estão documentados em [Segurança](docs/SEGURANCA.md).

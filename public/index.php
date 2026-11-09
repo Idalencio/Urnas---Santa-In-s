@@ -22,6 +22,9 @@ try {
     if ($path === '/api/v2/app') {
         \Urna\v2App();
     }
+    if ($path === '/api/v2/audit') {
+        \Urna\auditEndpoint();
+    }
     if ($path === '/api/v2/tally') {
         \Urna\v2Tally();
     }

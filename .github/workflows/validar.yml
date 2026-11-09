@@ -40,6 +40,11 @@ jobs:
           .venv/bin/pip install -r tests/requirements.txt
       - name: Instalar dependências da interface
         run: npm ci
+      - name: Auditar dependências da interface
+        run: |
+          npm audit
+          npm ci --prefix frontend
+          npm audit --prefix frontend
       - name: Conferir formatação e tipos
         run: |
           npm run format:check
@@ -57,3 +62,32 @@ jobs:
           URNA_TEST_DB_USER: root
           URNA_TEST_DB_PASSWORD: urna_ci_local
         run: .venv/bin/python tests/run-http.py
+
+  previa-e-seguranca:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Instalar pnpm e dependências fixadas
+        run: |
+          npm install --global pnpm@11.25.0
+          pnpm install --frozen-lockfile
+      - name: Auditar dependências da prévia
+        run: pnpm audit
+      - name: Validar APIs e proteção administrativa
+        run: |
+          node scripts/check-demo.mjs
+          node scripts/check-team.mjs
+          node scripts/check-roster.mjs
+          node scripts/check-delete-election.mjs
+          node scripts/check-import.mjs
+          node scripts/check-tally.mjs
+          node scripts/check-security.mjs
+          pnpm exec tsc --noEmit

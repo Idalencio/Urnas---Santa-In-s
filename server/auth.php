@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace Urna;
 
+require_once __DIR__ . '/security.php';
+
 const LOCAL_ADMIN_ID = 'csi-admin-local';
 const LOCAL_ADMIN_USERNAME = 'admin';
 
@@ -238,9 +240,13 @@ function authEndpoint(): never
     sameOrigin();
     $b = body();
     $action = $b['action'] ?? '';
+    if (str_starts_with((string) $action, 'mfa')) {
+        mfaAuth($b);
+    }
     if ($action === 'login') {
         throttle('login-ip:' . ($_SERVER['REMOTE_ADDR'] ?? ''), 12, 15);
         $username = strtolower(clean($b['username'] ?? '', 80));
+        throttle('login-account:' . $username, 12, 15);
         $initial = localAdminConfig();
         $p = storedLocalPassword();
         if ($p) {
@@ -265,7 +271,7 @@ function authEndpoint(): never
                         ) {
                             fail('Usuário ou senha incorretos.', 401);
                         }
-                        $result = session($account['id']);
+                        $result = mfaLogin($account['id'], $b);
                         resetThrottle('login-ip:' . ($_SERVER['REMOTE_ADDR'] ?? ''));
                         return $result;
                     }),
@@ -288,7 +294,7 @@ function authEndpoint(): never
                 if (!$p || !verifyPassword($b['password'] ?? null, $p['hash'])) {
                     fail('Usuário ou senha incorretos.', 401);
                 }
-                $result = session(LOCAL_ADMIN_ID);
+                $result = mfaLogin(LOCAL_ADMIN_ID, $b);
                 resetThrottle('login-ip:' . ($_SERVER['REMOTE_ADDR'] ?? ''));
                 return $result;
             }),
@@ -318,6 +324,8 @@ function authEndpoint(): never
                 if (!$p || !verifyPassword($b['currentPassword'] ?? null, $p['hash'])) {
                     fail('Sua senha atual está incorreta.', 401);
                 }
+                mfaConsume($me['id'], $b['code'] ?? null);
+                auditWrite($me, 'password', 'account', $me['id']);
                 sql(
                     'UPDATE admin_passwords SET hash=?,version=version+1,updated_at=? WHERE admin_id=?',
                     [$hash, now(), $me['id']],

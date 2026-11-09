@@ -69,9 +69,52 @@ try {
             "; configuração e armazenamento OK.\n";
         exit();
     }
+    if ($action === 'reset-mfa') {
+        installSchema();
+        $username = trim($argv[2] ?? '');
+        if ($username === '') {
+            throw new RuntimeException('Informe o usuário: php bin/console.php reset-mfa usuario');
+        }
+        $target =
+            $username === 'admin'
+                ? one('SELECT id,name FROM administrators WHERE id=?', [\Urna\LOCAL_ADMIN_ID])
+                : one(
+                    'SELECT a.id,a.name FROM administrators a JOIN v2_accounts c ON c.admin_id=a.id WHERE c.username=?',
+                    [$username],
+                );
+        if (!$target) {
+            throw new RuntimeException('Conta não encontrada.');
+        }
+        echo 'Isso desativa o segundo fator e encerra todas as sessões de ' .
+            $username .
+            '. Digite REDEFINIR para confirmar: ';
+        if (trim(fgets(STDIN) ?: '') !== 'REDEFINIR') {
+            throw new RuntimeException('Operação cancelada.');
+        }
+        transaction(function () use ($target) {
+            sql('DELETE FROM admin_mfa WHERE admin_id=?', [$target['id']]);
+            sql('UPDATE admin_passwords SET version=version+1 WHERE admin_id=?', [$target['id']]);
+            sql('DELETE FROM admin_sessions WHERE admin_id=?', [$target['id']]);
+            \Urna\auditWrite(
+                ['id' => 'console', 'name' => 'T.I. · console do servidor'],
+                'mfaReset',
+                'account',
+                $target['id'],
+            );
+        });
+        echo "Proteção em duas etapas redefinida. A senha foi preservada.\n";
+        exit();
+    }
     if ($action === 'reset-password') {
         provisionLocalAdmin();
+        installSchema();
         transaction(function () {
+            \Urna\auditWrite(
+                ['id' => 'console', 'name' => 'T.I. · console do servidor'],
+                'password',
+                'account',
+                \Urna\LOCAL_ADMIN_ID,
+            );
             sql(
                 'UPDATE admin_passwords SET hash=?,version=version+1,updated_at=? WHERE admin_id=?',
                 [localAdminConfig()['password_hash'], now(), \Urna\LOCAL_ADMIN_ID],
@@ -107,7 +150,7 @@ try {
         echo "Sessões vencidas e limites expirados limpos.\n";
         exit();
     }
-    echo "Comandos: init-config, init-admin, install, check, reset-password, cleanup. O primeiro login também prepara o sistema automaticamente.\n";
+    echo "Comandos: init-config, init-admin, install, check, reset-password, reset-mfa usuario, cleanup. O primeiro login também prepara o sistema automaticamente.\n";
 } catch (Throwable $e) {
     fwrite(STDERR, $e->getMessage() . "\n");
     exit(1);

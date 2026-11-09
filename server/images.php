@@ -62,7 +62,9 @@ function imageEndpoint(?string $id = null): never
         if ($f['size'] > 2 * 1024 * 1024) {
             fail('Arquivo muito grande.', 413);
         }
-        reply(['image' => storeImage(file_get_contents($f['tmp_name']))]);
+        $image = storeImage(file_get_contents($f['tmp_name']));
+        transaction(fn() => auditWrite($me, 'image', 'image', basename($image)));
+        reply(['image' => $image]);
     }
     method('GET');
     if (!preg_match('/^[a-zA-Z0-9-]{1,160}$/D', $id)) {

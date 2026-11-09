@@ -43,6 +43,7 @@ function saveCandidate(array $v): void
     $tid = clean($v['terminalId'] ?? '');
     $image = clean($v['image'] ?? '', 250);
     $cid = clean($v['id'] ?? '') ?: uuid();
+    auditTarget($cid);
     if (!$name || !preg_match('/^0?[0-9]$/D', $raw)) {
         fail('Informe o nome e um número de 0 a 9.');
     }
@@ -98,6 +99,7 @@ function saveTerminal(array $v): void
     $name = clean($v['name'] ?? '');
     $model = $v['model'] ?? '';
     $tid = clean($v['id'] ?? '') ?: uuid();
+    auditTarget($tid);
     if (!$name || !in_array($model, ['standard', 'images'], true)) {
         fail('Informe um nome e escolha o modelo da urna.');
     }
@@ -146,6 +148,9 @@ function appEndpoint(): never
     if ($action !== 'vote' && $me['role'] !== 'admin') {
         fail('Esta ação exige um administrador.', 403);
     }
+    if ($action !== 'vote') {
+        auditPrepare($me, 'legacy.' . $action, ['electionId' => $b['id'] ?? ''], $v);
+    }
     switch ($action) {
         case 'mail':
         case 'invite':
@@ -153,7 +158,9 @@ function appEndpoint(): never
         case 'admin':
             fail('Esta versão permite somente a conta admin local.', 403);
         case 'image':
-            reply(['image' => storeImageData($b['imageData'] ?? null)]);
+            $image = storeImageData($b['imageData'] ?? null);
+            transaction(fn() => auditTarget(basename($image)));
+            reply(['image' => $image]);
         case 'candidate':
             saveCandidate($v);
             break;

@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ShieldCheck,
   Pencil,
   Copy,
   Upload,
@@ -25,6 +26,7 @@ import { ClassPicker, ClassesPanel, type SchoolClass, type Student } from './peo
 import { TeamPanel, allowed, type TeamAccount } from './access';
 import Ballot from './ballot';
 import TallyPanel from './tally';
+import AuditPanel from './audit';
 import { exampleCandidates, previewElection } from './demo';
 import { responseData } from '../app/http';
 import { status, type Election, type Candidate, type Terminal } from './domain';
@@ -949,6 +951,15 @@ export default function App() {
             <Login onReady={load} />
           ) : (
             <>
+              {isAdmin && !data.me.mfaEnabled && view !== 'account' && (
+                <div className="security-reminder">
+                  <ShieldCheck size={20} />
+                  <span>Proteja sua conta com a verificação em duas etapas.</span>
+                  <button className="button secondary" onClick={() => go('account')}>
+                    Ativar proteção
+                  </button>
+                </div>
+              )}
               {view === 'elections' && !e && !creating && (
                 <>
                   {error && (
@@ -1600,6 +1611,9 @@ export default function App() {
                     />
                   }
                 />
+              )}
+              {view === 'audit' && isAdmin && (
+                <AuditPanel elections={data.elections} accounts={data.accounts} />
               )}
               {view === 'team' && isAdmin && (
                 <TeamPanel
