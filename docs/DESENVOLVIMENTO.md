@@ -13,6 +13,7 @@
 npm ci
 npm run check:v2
 npm run check:legacy
+npm run test:tally
 npm run build:v2
 npm run format:check
 ```
@@ -67,8 +68,16 @@ Variáveis aceitas: `URNA_TEST_DB_HOST` (padrão `127.0.0.1`), `URNA_TEST_DB_POR
 um serviço de banco de produção, mesmo que esteja no mesmo computador.
 
 As suites verificam voto e urnas compartilhadas, permissões da equipe, gestão
-manual/exclusão de alunos, exclusão de rascunhos e importação comparada por matrícula. Os dados e as senhas são fictícios. O runner também valida
+manual/exclusão de alunos, exclusão de rascunhos, importação comparada por matrícula e apuração agregada. Os dados e as senhas são fictícios. O runner também valida
 a criação da credencial inicial sem exibir senha nem sobrescrever arquivo existente.
 
 O workflow `.github/workflows/validar.yml` repete os checks e testes em um MariaDB
 isolado do GitHub Actions. Ele não instala nem publica no servidor da escola.
+
+## Apuração
+
+A aba Apuração usa `GET /api/v2/tally?election=<id>` com sessão e `X-Urna-Panel`. O serviço exige `viewResults`, vínculo com a eleição e publicação. Retorna candidatos congelados na publicação, votos agregados, totais de participação, situação e `generatedAt`, sem matrícula ou nome de eleitor. PHP lê a fotografia em uma transação; D1 usa uma única leitura do estado. Não grava votos nem altera eleições.
+
+O observador em `frontend/v2/tally-feed.ts` faz a primeira consulta imediatamente, depois a cada 300.000 ms. Usa o horário do servidor para antecipar a consulta à abertura/ao encerramento. Após resposta `closed`, não cria temporizador. Trocar eleição ou sair aborta a consulta e ignora respostas atrasadas. Falhas de rede preservam a última parcial, exibem erro e tentam novamente no próximo ciclo; perda de acesso remove os dados e interrompe as consultas. O carregamento geral de 20 segundos é suspenso nesta aba.
+
+`npm run test:tally` testa o tempo com relógio virtual, sem esperar cinco minutos. `tests/tally-v2.py` e `preview/scripts/check-tally.mjs` validam a API real em banco descartável: votos novos, reenvio idempotente, empate, separação por eleição, proteção de dados, permissões, revogação, agendamento e encerramento.

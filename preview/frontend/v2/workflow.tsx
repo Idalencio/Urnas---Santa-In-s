@@ -8,11 +8,13 @@ import {
   ShieldCheck,
   Menu,
   ChevronRight,
+  BarChart3,
 } from 'lucide-react';
 export function Shell({
   view,
   signedIn,
   admin = false,
+  canResults = false,
   name = '',
   go,
   logout,
@@ -21,6 +23,7 @@ export function Shell({
   view: string;
   signedIn: boolean;
   admin?: boolean;
+  canResults?: boolean;
   name?: string;
   go: (v: string) => void;
   logout: () => void;
@@ -29,6 +32,7 @@ export function Shell({
   const [menu, setMenu] = useState(false);
   const nav = [
     { id: 'elections', label: 'Eleições', icon: Vote },
+    ...(canResults ? [{ id: 'tally', label: 'Apuração', icon: BarChart3 }] : []),
     { id: 'terminals', label: 'Urnas', icon: Monitor },
     { id: 'students', label: 'Turmas', icon: Users },
     ...(admin ? [{ id: 'team', label: 'Acessos', icon: ShieldCheck }] : []),

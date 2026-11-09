@@ -159,6 +159,66 @@ function v2ResolveElection(string $terminalId, string $requested): array
     }
     return v2Election($requested);
 }
+/** Apuração somente de leitura: uma transação mantém votos e participação na mesma fotografia. */
+function v2Tally(): never
+{
+    method('GET');
+    $me = requireAdmin(true);
+    v2Permission($me, 'viewResults');
+    $id = clean($_GET['election'] ?? '');
+    v2ElectionAccess($me, $id);
+    $snapshot = transaction(function () use ($id) {
+        $e = v2Election($id);
+        if (!$e['published']) {
+            fail('A apuração fica disponível depois de publicar a eleição.', 409);
+        }
+        $votes = [];
+        foreach (
+            all(
+                "SELECT candidate_id,COUNT(*) AS total FROM v2_ballots WHERE election_id=? AND kind='valid' GROUP BY candidate_id",
+                [$id],
+            )
+            as $row
+        ) {
+            $votes[$row['candidate_id']] = (int) $row['total'];
+        }
+        $counts = one(
+            'SELECT COUNT(*) AS eligible,COALESCE(SUM(voted),0) AS voted FROM v2_electors WHERE election_id=?',
+            [$id],
+        );
+        $candidates = array_map(function ($c) use ($votes) {
+            return [
+                'id' => $c['id'],
+                'name' => $c['name'],
+                'code' => $c['code'],
+                'image' => $c['image'] ?? '',
+                'viceName' => $c['viceName'] ?? '',
+                'viceImage' => $c['viceImage'] ?? '',
+                'votes' => $votes[$c['id']] ?? 0,
+            ];
+        }, $e['candidateSnapshot']);
+        // Não inclui matrículas, turmas, liberações ou identificação de votantes.
+        return [
+            'election' => [
+                'id' => $e['id'],
+                'name' => $e['name'],
+                'status' => v2Status($e),
+                'startsAt' => $e['startsAt'],
+                'endsAt' => $e['endsAt'],
+                'hasVice' => (int) $e['hasVice'],
+                'requireMatricula' => (int) $e['requireMatricula'],
+            ],
+            'candidates' => $candidates,
+            'totals' => [
+                'votes' => array_sum(array_column($candidates, 'votes')),
+                'eligible' => (int) $counts['eligible'],
+                'voted' => (int) $counts['voted'],
+            ],
+            'generatedAt' => now(),
+        ];
+    });
+    reply($snapshot);
+}
 /** Monta o painel com os dados que a conta pode consultar, sem senhas ou tokens. */
 function v2State(array $me): array
 {

@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 09/11/2026 — Painel de apuração
+
+- Nova aba Apuração, com seleção de eleições publicadas, fotos de candidato e vice, ranking, votos, percentuais e participação.
+- Consulta inicial imediata e atualização automática a cada cinco minutos. Busca também na abertura/encerramento por horário; resultados encerrados ficam sem temporizador.
+- API agregada somente de leitura nos serviços PHP/MySQL e D1, protegida por sessão, permissão de resultados e acesso à eleição. Sem dados individuais de eleitores.
+- Tratamento de empate, zero votos, votação sem matrícula, falha de conexão e troca rápida de eleição. Exportação CSV da fotografia exibida.
+- Validação em bancos descartáveis, relógio virtual e revisão visual responsiva.
+
 ## 06/11/2026 — candidato e vice; importação comparada por matrícula
 
 - Nomenclatura genérica no cadastro, nas fotos, nos exemplos e nos dois modelos de urna.

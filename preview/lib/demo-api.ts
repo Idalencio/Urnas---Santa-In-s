@@ -499,6 +499,48 @@ function state(s: any, me: any) {
       })),
   };
 }
+/** A fotografia D1 vem de uma única leitura; não expõe dados individuais dos eleitores. */
+async function tally(req: Request) {
+  if (req.method !== 'GET') fail('Método não permitido.', 405);
+  const me = await user(req);
+  if (!can(me, 'viewResults')) fail('O administrador não liberou esta ação para sua conta.', 403);
+  const { s } = await load();
+  const e = election(s, new URL(req.url).searchParams.get('election') || '');
+  if (!hasElection(me, e)) fail('Esta eleição não foi liberada para sua conta.', 403);
+  if (!e.published) fail('A apuração fica disponível depois de publicar a eleição.', 409);
+  const votes = new Map<string, number>();
+  for (const b of s.ballots)
+    if (b.electionId === e.id && b.kind === 'valid')
+      votes.set(b.candidateId, (votes.get(b.candidateId) || 0) + 1);
+  const candidates = e.candidateSnapshot.map((c: any) => ({
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    image: c.image || '',
+    viceName: c.viceName || '',
+    viceImage: c.viceImage || '',
+    votes: votes.get(c.id) || 0,
+  }));
+  const rows = s.electors[e.id] || [];
+  return json({
+    election: {
+      id: e.id,
+      name: e.name,
+      status: status(e),
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+      hasVice: e.hasVice,
+      requireMatricula: e.requireMatricula,
+    },
+    candidates,
+    totals: {
+      votes: candidates.reduce((n: number, c: any) => n + c.votes, 0),
+      eligible: rows.length,
+      voted: rows.filter((r: any) => r.voted).length,
+    },
+    generatedAt: date(),
+  });
+}
 function saveAccount(s: any, me: any, v: any, password: string | null) {
   const id = clean(v.id) || uuid(),
     name = clean(v.name),
@@ -1095,6 +1137,7 @@ export async function endpoint(req: Request) {
       }
       fail('Ação inválida.');
     }
+    if (path === '/api/v2/tally') return await tally(req);
     if (path === '/api/v2/app') {
       if (req.method === 'GET') {
         const me = await user(req);

@@ -45,6 +45,7 @@ jobs:
           npm run format:check
           npm run check:v2
           npm run check:legacy
+          npm run test:tally
       - name: Compilar a interface V2
         run: npm run build:v2
       - name: Conferir sintaxe PHP

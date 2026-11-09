@@ -66,6 +66,7 @@ lucide-react/dist/esm/Icon.mjs:
 lucide-react/dist/esm/createLucideIcon.mjs:
 lucide-react/dist/esm/icons/arrow-left.mjs:
 lucide-react/dist/esm/icons/arrow-right.mjs:
+lucide-react/dist/esm/icons/chart-column.mjs:
 lucide-react/dist/esm/icons/check.mjs:
 lucide-react/dist/esm/icons/chevron-right.mjs:
 lucide-react/dist/esm/icons/circle-check.mjs:

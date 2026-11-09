@@ -24,6 +24,7 @@ import { ElectionList, UrnasPanel } from './management';
 import { ClassPicker, ClassesPanel, type SchoolClass, type Student } from './people';
 import { TeamPanel, allowed, type TeamAccount } from './access';
 import Ballot from './ballot';
+import TallyPanel from './tally';
 import { exampleCandidates, previewElection } from './demo';
 import { responseData } from '../app/http';
 import { status, type Election, type Candidate, type Terminal } from './domain';
@@ -612,6 +613,7 @@ export default function App() {
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const [publishedTab, setPublishedTab] = useState('voting');
+  const [tallyId, setTallyId] = useState('');
   const [view, setView] = useState('elections'),
     [selected, setSelected] = useState(''),
     [creating, setCreating] = useState(false),
@@ -662,12 +664,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [notice]);
   useEffect(() => {
-    if (!data) return;
+    if (!data || view === 'tally') return;
     const timer = setInterval(() => {
       if (!busyRef.current) load().catch(() => {});
     }, 20000);
     return () => clearInterval(timer);
-  }, [!!data]);
+  }, [!!data, view]);
   // Centraliza escritas e recarrega o painel depois da resposta do servidor.
   async function action(name: string, payload: any = {}) {
     if (busyRef.current) throw Error('Aguarde a operação atual.');
@@ -924,6 +926,7 @@ export default function App() {
         view={view}
         signedIn={!!data}
         admin={isAdmin}
+        canResults={canResults}
         name={data?.me.name}
         go={go}
         logout={() =>
@@ -979,6 +982,10 @@ export default function App() {
                     </details>
                   )}
                 </>
+              )}
+
+              {view === 'tally' && canResults && (
+                <TallyPanel elections={data.elections} selectedId={tallyId} select={setTallyId} />
               )}
 
               {view === 'elections' && (creating || draft) && (
@@ -1523,6 +1530,15 @@ export default function App() {
                       <div className="clean-detail-heading">
                         <h2>Resultados</h2>
                       </div>
+                      <button
+                        className="button primary"
+                        onClick={() => {
+                          setTallyId(e.id);
+                          go('tally');
+                        }}
+                      >
+                        Abrir painel de apuração <ArrowRight size={16} />
+                      </button>
                       <button
                         className="button secondary"
                         onClick={() =>

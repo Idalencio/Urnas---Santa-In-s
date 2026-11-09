@@ -22,6 +22,9 @@ try {
     if ($path === '/api/v2/app') {
         \Urna\v2App();
     }
+    if ($path === '/api/v2/tally') {
+        \Urna\v2Tally();
+    }
     if (preg_match('#^/api/v2/urna/([a-zA-Z0-9-]+)$#D', $path, $m)) {
         \Urna\v2Public($m[1]);
     }
