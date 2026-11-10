@@ -1,85 +1,66 @@
-# Segurança da urna
+# Proteção dos dados da urna
 
-## Atualização de 9 de novembro de 2026
+## Atualização de 10 de novembro de 2026
 
-A proteção em duas etapas e o histórico administrativo funcionam no pacote PHP/MySQL e na prévia D1. Os ambientes têm bancos e chaves separados. Esta atualização não altera o eleitorado publicado nem vincula votos à matrícula.
+O acesso usa **usuário e senha**. A pedido da escola, a verificação em duas etapas foi retirada da interface, dos fluxos de autenticação e da configuração ativa. O histórico continua disponível **somente para administradores**, com verificação no servidor. Permissões de equipe, inclusive apuração, não concedem acesso ao histórico.
 
-### Ativar a proteção da conta
+Esta revisão mantém os bancos PHP/MySQL e D1 separados, a estrutura `public/`, o design Santa Inês, os cadastros, os eleitorados publicados e os votos. Nenhum voto recebe matrícula ou nome do eleitor.
 
-1. Entre no painel e abra **Conta → Proteção em duas etapas → Ativar proteção**.
-2. Confirme sua senha atual e adicione o QR code a um aplicativo autenticador compatível com TOTP.
-3. Digite o código do aplicativo para concluir. A configuração pendente expira em 10 minutos e pertence à aba que a iniciou.
-4. Guarde os dez códigos de recuperação em local seguro, separado da senha. São exibidos uma vez e cada um funciona uma vez.
+## Acesso aos dados
 
-O QR code é gerado no navegador, sem enviar a chave a um serviço externo. A ativação é individual: esta atualização não configura o celular de ninguém. O painel lembra administradores que ainda não ativaram a proteção e indica a situação de cada conta em Acessos.
+- APIs administrativas exigem sessão válida, conta ativa e a chave adicional da aba. A autorização é reavaliada em cada consulta ou alteração.
+- Contas de equipe recebem somente as eleições e turmas permitidas; não recebem o cadastro geral de estudantes ou a lista de contas.
+- O endpoint `/api/v2/audit` é somente leitura e recusa contas de equipe, mesmo que conheçam o endereço ou tenham todas as outras permissões.
+- Fotos de eleições em preparação são limitadas ao administrador, ao responsável pelo envio com permissão de edição ou às contas autorizadas na eleição. A regra também vale ao associar uma imagem a um candidato.
+- Fotos presentes na lista de candidatos de uma eleição aberta continuam públicas para a urna funcionar. Ao encerrar a eleição, o acesso anônimo deixa de ser autorizado.
+- A liberação por matrícula devolve apenas um token temporário e sua validade. Não devolve nome nem turma do estudante. A configuração pública da urna não inclui listas de alunos, contas ou credenciais.
 
-Depois da ativação, a senha sozinha não cria sessão. O login pede um código do aplicativo ou de recuperação. Ativar, renovar códigos ou desativar exige novamente a senha; renovar/desativar e trocar senha também exige o segundo fator. Essas alterações invalidam as outras sessões. Redefinir uma senha administrativa não remove o segundo fator.
+Matrícula continua sendo um identificador, não um segredo forte. A revisão reduz a exposição de dados nessa consulta sem mudar a forma de votar solicitada pela escola.
 
-| Proteção     | Implementação                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------ |
-| Autenticador | RFC 6238, SHA-1, 6 dígitos, 30 segundos, tolerância de um intervalo em cada direção              |
-| Reutilização | Último intervalo aceito é persistido; a transação/CAS impede consumo duplicado                   |
-| Recuperação  | Dez códigos aleatórios de 128 bits; somente SHA-256 no banco; consumo único                      |
-| Chave TOTP   | 160 bits aleatórios; AES-256-GCM no servidor; não é devolvida após a configuração                |
-| Tentativas   | Login limitado por IP e conta; operações de MFA limitadas por conta                              |
-| Sessões      | Cookie HttpOnly/Secure em HTTPS, chave adicional da aba, validade de 12 horas e versão revogável |
+## Requisições, arquivos e exportações
 
-Se um código tiver acabado de ser usado, espere o aplicativo mostrar o próximo. A revogação é conferida pelo servidor a cada requisição; linhas antigas de sessão podem permanecer até a limpeza sem conceder acesso.
+- Escritas exigem origem igual à do site e JSON válido. Métodos não previstos são recusados. Há limites para tamanho de requisições; na prévia, o fluxo é interrompido ao exceder o limite, mesmo sem `Content-Length`.
+- Consultas MySQL/SQLite usam parâmetros preparados. O retorno de erros não inclui SQL, credenciais, rastreamento interno ou corpo de requisições.
+- Uploads aceitam PNG, JPEG e WebP de até 2 MB, 6000 pixels por lado e 20 megapixels. O servidor verifica os bytes, o formato e as dimensões; a prévia também compara o tipo declarado e recusa arquivos incompletos. Isso não equivale a uma análise antivírus ou decodificação completa de todos os pixels.
+- Fotos ficam fora da raiz pública no PHP ou em R2 protegido por API. São entregues com tipo de imagem, `nosniff` e `no-store`; nomes enviados pelo usuário não viram caminhos no servidor.
+- Exportações CSV neutralizam células que poderiam virar fórmulas ao serem abertas no Excel, incluindo nomes e turmas importados.
+- Respostas do painel e das APIs não são armazenadas em cache. Cabeçalhos restringem scripts, enquadramento da página, recursos do navegador e envio de referência. HTTPS recebe HSTS. A prévia preserva a integração de exibição do ChatGPT.
+- O exemplo Nginx em `deploy/nginx-location.conf` acrescenta bloqueios para arquivos internos, repositório, mapas de código, bancos, logs e backups. Esses blocos precisam estar no Vhost real para proteger arquivos servidos diretamente pelo Nginx.
 
-### Chaves e recuperação pela T.I.
+## Senhas, sessões e histórico
 
-**PHP/CloudPanel:** a chave AES é criada automaticamente em `storage/security/mfa.key`, fora de `public`, com arquivo 0600 e diretório 0700. O usuário PHP precisa escrever em `storage`. Faça backup privado dessa chave junto com o banco. Não a publique nem a envie ao GitHub. Apagar ou substituir a chave impede a leitura dos autenticadores existentes.
+PHP armazena hash de senha pelo algoritmo padrão do PHP com pré-hash SHA-256 identificado por versão. A prévia mantém seu formato PBKDF2. Senhas, hashes e credenciais persistidas no banco não são retornados à interface nem registrados no histórico. Chaves temporárias de sessão e liberação são entregues somente ao fluxo que precisa delas. Cookies são HttpOnly, Secure em HTTPS e SameSite=Lax. Sessões têm validade de 12 horas; trocar senha ou desativar a conta revoga as anteriores. Tentativas de login são limitadas por IP e conta.
 
-Se alguém perder o autenticador e todos os códigos, a T.I. com acesso ao servidor pode executar:
+O histórico registra responsável, data, ação, alvo, eleição e totais de importação. Não registra escolhas de voto, senhas, tokens ou conteúdo bruto das listas. Alterações administrativas e seu evento são confirmados na mesma transação; falha ao registrar desfaz a alteração. Arquivos enviados antes de uma falha podem permanecer sem referência, sem confirmar associação a um candidato.
 
-```sh
-php bin/console.php reset-mfa nome_do_usuario
-```
+Eventos antigos continuam preservados, inclusive os da funcionalidade retirada. O histórico começou na atualização de 9 de novembro; ações anteriores não podem ser reconstruídas. Não há edição ou exclusão pela interface/API. Quem controla diretamente o banco ou o servidor pode alterá-lo; ele não é uma prova imutável contra esse acesso.
 
-O comando exige a confirmação textual `REDEFINIR`, registra a ação como console da T.I., preserva a senha e encerra todas as sessões da conta. Depois, o usuário deve entrar e configurar outro autenticador. Esse comando não deve ser disponibilizado pela web. O comando `reset-password` preserva a MFA e também gera um registro no histórico.
+## Atualização de instalações existentes
 
-**Prévia hospedada:** a chave `MFA_ENCRYPTION_KEY` é um segredo do ambiente, com 64 caracteres hexadecimais aleatórios. Não fica no código, no banco ou em `.openai/hosting.json`. Não a rotacione sem um plano de recuperação. Para recuperação extraordinária da prévia, use o acesso de manutenção ao banco pela plataforma; não existe endpoint web que permita a outra conta remover a MFA silenciosamente. A identidade e a restrição de público da plataforma continuam preservadas.
+A migração `database/007_data_protection.sql` cria o controle de propriedade das imagens, remove as credenciais do segundo fator e invalida sessões que o usavam, preservando senhas e dados eleitorais. As migrações anteriores permanecem no repositório para manter a sequência de instalação. Novos envios registram seu responsável; fotos antigas continuam disponíveis ao administrador ou pela eleição autorizada.
 
-### Histórico administrativo
+Na prévia, a primeira leitura do documento antigo remove a configuração de segundo fator por atualização com revisão, registra o evento e invalida as sessões afetadas. A operação é idempotente e não modifica estudantes, eleições ou votos. O segredo de ambiente usado exclusivamente pela funcionalidade retirada deixa de ser necessário.
 
-Administradores consultam **Histórico**; contas de equipe não têm esse acesso, mesmo com permissão de apuração. A API é somente leitura e exige sessão e chave do painel. Há filtros por responsável, ação, eleição e data, com paginação de 50 registros. Datas dos filtros usam UTC; horários da lista são exibidos no fuso do navegador.
+No CloudPanel, atualize a aplicação completa, mantenha o document root em `public/`, execute `php bin/console.php install` e `php bin/console.php check`, e aplique as regras Nginx. O primeiro login também aplica migrações pendentes sob bloqueio. Um arquivo privado antigo `storage/security/mfa.key`, se existir, não é utilizado pela versão atual e permanece fora da raiz pública; sua remoção cabe à manutenção do servidor. **Publicar a prévia não atualiza o CloudPanel.**
 
-O registro inclui data, ID e nome do responsável, ação, tipo e ID do alvo, eleição relacionada e totais da importação. Inclui cadastros e alterações de eleições, candidatos, urnas, alunos, turmas e acessos; importações, inclusive sem mudanças; publicação, encerramento, duplicação, exclusão de rascunhos, cancelamento de liberações; uploads e alterações de senha/MFA. Entradas bem-sucedidas no painel também ficam registradas. Operações antigas do painel legado recebem prefixo `legacy.`.
+## Validação e limites desta revisão
 
-Mudanças administrativas e seu histórico são confirmados na mesma transação: falha ao registrar desfaz a alteração. No D1, o evento só acompanha a revisão vencedora do CAS. Arquivos enviados ao armazenamento antes de uma falha podem ficar sem referência; isso não confirma sua associação a um candidato.
-
-Não são gravados senha, chave de autenticação, QR code, tokens, códigos de recuperação, conteúdo bruto de listas ou escolhas de voto. Matrícula pode aparecer como alvo de uma alteração cadastral ou cancelamento administrativo, nunca junto de uma escolha de voto. Eventos de votação pública ficam fora desse histórico.
-
-O histórico começa nesta atualização; ações anteriores não podem ser reconstruídas. Não há edição ou exclusão de eventos pela interface/API. Ele não é uma prova imutável contra alguém que controla o banco ou o servidor. Defina retenção e backups conforme as regras da escola; não há expurgo automático nesta versão.
-
-### Dependências e verificações
-
-A revisão atualizou Next.js para 16.4.1, React/React DOM/RSC da prévia para 19.2.8 e Vite para 8.1.6, além das dependências transitivas apontadas pela auditoria. Os overrides em `preview/pnpm-workspace.yaml` e `preview/package.json` mantêm versões corrigidas; não os remova antes de conferir a árvore completa novamente.
-
-Na checagem desta entrega, os 23 alertas das dependências de produção da prévia caíram para zero. Também foram consultadas as dependências de desenvolvimento. Auditoria de pacotes cobre alertas conhecidos naquele momento; não comprova ausência de vulnerabilidades na aplicação.
-
-Verificações reproduzíveis:
+Os testes usam dados fictícios e bancos descartáveis. Cobrem login sem segundo fator, atualização de instalações antigas, revogação de sessões, histórico exclusivo de administrador, acesso indevido a fotos, conteúdo falso em uploads, redução de dados públicos, tentativas de SQL injection, origem externa, tamanho de requisição e rollback do histórico. Exportações têm testes específicos contra fórmulas. O CI executa essas verificações e auditorias de dependências.
 
 ```sh
 npm ci
-npm audit
 npm run check:v2
 npm run check:legacy
 npm run test:tally
+npm run test:security
 npm run test:http
 ```
 
-No diretório `preview`, após instalar com a versão de pnpm do projeto:
+Na prévia, após instalar suas dependências fixadas:
 
 ```sh
 pnpm audit
 node scripts/check-security.mjs
 ```
 
-A suíte de segurança cobre vetores oficiais RFC 6238, sessão sem segundo fator, códigos repetidos, recuperação de uso único, validade e vínculo da configuração, revogação de sessões, permissões, dados omitidos do histórico e rollback quando o log falha. Os testes usam bancos descartáveis e dados fictícios. O CI verifica dependências e fluxos para evitar regressões.
-
-### Implantação do pacote PHP
-
-A migração `database/006_security.sql` adiciona apenas as tabelas `admin_mfa` e `admin_audit`, sem modificar os votos existentes. Atualize a aplicação completa, mantenha o document root em `public`, execute `php bin/console.php install` e `php bin/console.php check`, e confirme HTTPS e permissões do armazenamento. O primeiro acesso também aplica migrações pendentes sob bloqueio. A publicação da prévia não instala este pacote no CloudPanel.
-
-Ainda é necessário validar a configuração real do servidor, backups/restauração e operação da escola. A matrícula continua sendo a forma de liberação do aluno; ela não é um segredo forte e esta entrega não troca esse método. Não foi feita certificação de segurança nem declaração de conformidade legal.
+Os registros de alunos não são cifrados individualmente no banco. Proteção de discos, acesso SSH/MySQL, firewall, atualizações do sistema operacional e cópias de segurança dependem da infraestrutura. A configuração real do CloudPanel e a restauração de backups não foram auditadas nesta entrega. Auditoria de dependências identifica alertas conhecidos naquele momento; não garante ausência de vulnerabilidades. Esta revisão não é uma certificação de segurança nem de conformidade legal.

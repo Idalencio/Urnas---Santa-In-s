@@ -5,7 +5,7 @@ namespace Urna;
 /** Aplica somente migrações pendentes; mantém as tabelas e os votos anteriores. */
 function v2Schema(): void
 {
-    if (one("SELECT version FROM schema_migrations WHERE version='006_security.sql'")) {
+    if (one("SELECT version FROM schema_migrations WHERE version='007_data_protection.sql'")) {
         return;
     }
     installSchema();
@@ -88,12 +88,13 @@ function v2Candidates(string $id): array
         [$id],
     );
 }
-function v2Image(string $image): bool
+function v2Image(string $image, array $me): bool
 {
     return $image === '' ||
         preg_match('#^/characters/(lion|owl|fox)\.svg$#D', $image) ||
         (preg_match('#^/api/images/[a-zA-Z0-9-]+$#D', $image) &&
-            is_file(ROOT . '/storage/uploads/' . basename($image)));
+            is_file(ROOT . '/storage/uploads/' . basename($image)) &&
+            imageReadable($me, $image));
 }
 /** Matrícula é texto: os zeros iniciais e a identificação original são preservados. */
 function v2Matricula(mixed $value): string
@@ -331,7 +332,7 @@ function v2SaveElection(array $v, array $me): string
     return $id;
 }
 /** Número é único por eleição; candidato e vice são salvos na mesma chapa. */
-function v2SaveCandidate(array $v): void
+function v2SaveCandidate(array $v, array $me): void
 {
     $eid = clean($v['electionId'] ?? '');
     $id = clean($v['id'] ?? '') ?: uuid();
@@ -344,7 +345,7 @@ function v2SaveCandidate(array $v): void
     if (!$name || !preg_match('/^(?:0|[1-9][0-9]{0,4})$/D', $code)) {
         fail('Informe nome e um número de 0 a 99999, sem zeros adicionados à esquerda.');
     }
-    if (!v2Image($image) || !v2Image($viceImage)) {
+    if (!v2Image($image, $me) || !v2Image($viceImage, $me)) {
         fail('Envie uma imagem válida.');
     }
     transaction(function () use ($v, $eid, $id, $name, $code, $image, $viceName, $viceImage) {
@@ -700,8 +701,6 @@ function v2Authorize(string $id, array $b): array
         return [
             'ok' => true,
             'gate' => $gate,
-            'name' => $student['name'],
-            'className' => $student['class_name'],
             'expiresIn' => 300,
         ];
     });
@@ -859,13 +858,13 @@ function v2App(): never
             v2DeleteElection(clean($b['electionId'] ?? ''));
             break;
         case 'candidate':
-            v2SaveCandidate($v);
+            v2SaveCandidate($v, $me);
             break;
         case 'terminal':
             v2SaveTerminal($v);
             break;
         case 'image':
-            $image = storeImageData($b['imageData'] ?? null);
+            $image = storeImageData($b['imageData'] ?? null, $me['id']);
             transaction(fn() => auditTarget(basename($image)));
             reply(['image' => $image]);
         case 'csvPreview':

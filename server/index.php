@@ -13,11 +13,16 @@ require __DIR__ . '/../server/roster-v2.php';
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
+header('Cross-Origin-Resource-Policy: same-origin');
 header(
     "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
 );
 
 try {
+    if (str_starts_with(\Urna\origin(), 'https://')) {
+        header('Strict-Transport-Security: max-age=31536000');
+    }
     $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
     if ($path === '/api/v2/app') {
         \Urna\v2App();

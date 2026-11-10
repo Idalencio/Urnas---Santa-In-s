@@ -78,7 +78,6 @@ lucide-react/dist/esm/icons/download.mjs:
 lucide-react/dist/esm/icons/expand.mjs:
 lucide-react/dist/esm/icons/hand.mjs:
 lucide-react/dist/esm/icons/images.mjs:
-lucide-react/dist/esm/icons/key-round.mjs:
 lucide-react/dist/esm/icons/keyboard.mjs:
 lucide-react/dist/esm/icons/lock-keyhole.mjs:
 lucide-react/dist/esm/icons/log-out.mjs:
@@ -94,7 +93,6 @@ lucide-react/dist/esm/icons/rotate-ccw.mjs:
 lucide-react/dist/esm/icons/search.mjs:
 lucide-react/dist/esm/icons/settings.mjs:
 lucide-react/dist/esm/icons/shield-check.mjs:
-lucide-react/dist/esm/icons/smartphone.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
 lucide-react/dist/esm/icons/upload.mjs:
 lucide-react/dist/esm/icons/user-plus.mjs:

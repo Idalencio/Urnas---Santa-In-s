@@ -81,3 +81,11 @@ Validação: tipos das interfaces, build V2, sintaxe PHP, 184 verificações HTT
 - Adiciona TOTP, códigos de recuperação de uso único, proteção das alterações de senha e revogação de sessões.
 - Acrescenta histórico administrativo restrito, filtros e registros atômicos com as alterações.
 - Inclui recuperação de MFA pelo console PHP e testes de segurança nos dois adaptadores.
+
+## 2026-11-10 · Proteção de dados sem segundo fator
+
+- Retira a verificação em duas etapas e suas credenciais ativas, preservando senhas e dados eleitorais.
+- Mantém o histórico exclusivo de administradores, com testes de tentativa de acesso por equipe.
+- Restringe fotos privadas por conta/eleição, inclusive ao associar imagens a candidatos.
+- Reduz os dados retornados na liberação por matrícula e reforça uploads, JSON, limites de corpo e cabeçalhos.
+- Neutraliza fórmulas em exportações CSV e documenta bloqueios adicionais de arquivos no Nginx.

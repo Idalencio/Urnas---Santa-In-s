@@ -158,7 +158,7 @@ function appEndpoint(): never
         case 'admin':
             fail('Esta versão permite somente a conta admin local.', 403);
         case 'image':
-            $image = storeImageData($b['imageData'] ?? null);
+            $image = storeImageData($b['imageData'] ?? null, $me['id']);
             transaction(fn() => auditTarget(basename($image)));
             reply(['image' => $image]);
         case 'candidate':

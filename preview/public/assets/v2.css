@@ -6095,86 +6095,6 @@
   }
 }
 
-/* Segurança mantém a identidade e os componentes do painel Santa Inês. */
-.security-panel {
-  margin-top: 24px;
-}
-.security-badge {
-  padding: 7px 12px;
-  border-radius: 30px;
-  background: #fff5dd;
-  color: #866216;
-  font-weight: 700;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.security-badge.enabled {
-  background: #e5f5eb;
-  color: #22653e;
-}
-.security-explanation {
-  display: flex;
-  gap: 18px;
-  align-items: flex-start;
-  padding: 24px 0;
-  color: #244e76;
-}
-.security-explanation h3 {
-  margin: 0 0 6px;
-  font-size: 17px;
-}
-.security-explanation p {
-  margin: 0;
-  color: #5b6c7e;
-  line-height: 1.65;
-}
-.security-enrollment {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 24px;
-  align-items: center;
-  padding: 20px 0;
-}
-.security-enrollment img {
-  max-width: 100%;
-  height: auto;
-  border: 1px solid #dce5ef;
-  border-radius: 12px;
-}
-.security-enrollment h3 {
-  font-size: 16px;
-}
-.authenticator-secret {
-  display: block;
-  overflow-wrap: anywhere;
-  padding: 12px;
-  background: #f0f5fa;
-  color: #163d66;
-  border-radius: 8px;
-  font-size: 14px;
-  letter-spacing: 1px;
-}
-.security-recovery {
-  padding: 18px 0;
-}
-.security-recovery h3 {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.recovery-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 22px 0;
-}
-.recovery-grid code {
-  padding: 10px;
-  background: #f1f5f9;
-  border-radius: 6px;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
 .audit-filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) 150px 150px;
@@ -6263,15 +6183,6 @@
   }
 }
 @media (max-width: 650px) {
-  .security-enrollment {
-    grid-template-columns: 1fr;
-  }
-  .security-enrollment img {
-    width: 220px;
-  }
-  .recovery-grid {
-    grid-template-columns: 1fr;
-  }
   .audit-filters {
     grid-template-columns: 1fr 1fr;
   }
@@ -6282,34 +6193,5 @@
     align-items: flex-start;
     gap: 12px;
     flex-direction: column;
-  }
-  .security-panel .panel-heading {
-    align-items: flex-start;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-}
-
-.security-reminder {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid #d8e5f4;
-  background: #eff5fc;
-  border-radius: 12px;
-  padding: 12px 18px;
-  margin-bottom: 24px;
-  color: #244c78;
-  font-size: 13px;
-}
-.security-reminder > span {
-  flex: 1;
-}
-@media (max-width: 650px) {
-  .security-reminder {
-    flex-wrap: wrap;
-  }
-  .security-reminder > span {
-    flex-basis: 80%;
   }
 }

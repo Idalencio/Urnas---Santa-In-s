@@ -11,17 +11,16 @@
     "check:legacy": "tsc --noEmit -p frontend/tsconfig.json",
     "test:tally": "node tests/tally-polling.mjs",
     "test:http": "python3 tests/run-http.py",
-    "sync:preview": "node bin/sync-preview.mjs"
+    "sync:preview": "node bin/sync-preview.mjs",
+    "test:security": "node tests/data-protection.mjs"
   },
   "dependencies": {
     "lucide-react": "0.468.0",
-    "qrcode": "^1.5.4",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
   "devDependencies": {
     "@prettier/plugin-php": "0.26.0",
-    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "esbuild": "^0.28.1",

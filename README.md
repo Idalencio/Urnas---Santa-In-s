@@ -82,4 +82,4 @@ O envio ao GitHub não publica automaticamente no CloudPanel.
 
 Desenvolvido pela T.I.
 
-A proteção em duas etapas, o histórico administrativo e a recuperação pela T.I. estão documentados em [Segurança](docs/SEGURANCA.md).
+A proteção dos dados, o controle de acesso às imagens e o histórico exclusivo de administradores estão documentados em [Segurança](docs/SEGURANCA.md).

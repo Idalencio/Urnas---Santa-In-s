@@ -9,7 +9,6 @@ export type TeamAccount = {
   name: string;
   username: string;
   role: string;
-  mfaEnabled?: boolean;
   active: number;
   owner: number;
   permissions: string[];
@@ -274,7 +273,7 @@ export function TeamPanel({
             <div>
               <h2>{a.name}</h2>
               <p>
-                {a.username} · {a.mfaEnabled ? '2FA ativa' : '2FA pendente'} ·{' '}
+                {a.username} ·{' '}
                 {a.role === 'admin'
                   ? 'Administrador'
                   : a.classes === null

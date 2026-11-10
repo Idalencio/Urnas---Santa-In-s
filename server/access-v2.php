@@ -18,7 +18,6 @@ function v2Profile(array $a): array
         'role' => $a['role'],
         'active' => (int) $a['active'],
         'owner' => (int) $a['owner'],
-        'mfaEnabled' => (bool) (mfaRow($a['id'])['enabled'] ?? false),
         'permissions' => $admin ? V2_PERMISSIONS : json_decode($p['permissions'] ?? '[]', true),
         'classes' => $admin
             ? null

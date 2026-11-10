@@ -6,6 +6,7 @@ const ACTIONS: Record<string, string> = {
   login: 'Entrada no painel',
   mfaBegin: 'Configuração de autenticador iniciada',
   password: 'Senha alterada',
+  securityUpdated: 'Proteções de dados atualizadas',
   mfaConfirm: 'Proteção em duas etapas ativada',
   mfaRecovery: 'Códigos de recuperação renovados',
   mfaDisable: 'Proteção em duas etapas desativada',
@@ -80,11 +81,13 @@ export default function AuditPanel({ elections, accounts }: { elections: any[]; 
             Ação
             <select value={filter.action} onChange={(e) => change('action', e.target.value)}>
               <option value="">Todas as ações</option>
-              {Object.entries(ACTIONS).map(([id, label]) => (
-                <option key={id} value={id}>
-                  {label}
-                </option>
-              ))}
+              {Object.entries(ACTIONS)
+                .filter(([id]) => !id.startsWith('mfa'))
+                .map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
             </select>
           </label>
           <label>

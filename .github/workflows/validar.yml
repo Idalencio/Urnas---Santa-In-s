@@ -51,6 +51,7 @@ jobs:
           npm run check:v2
           npm run check:legacy
           npm run test:tally
+          npm run test:security
       - name: Compilar a interface V2
         run: npm run build:v2
       - name: Conferir sintaxe PHP
@@ -90,4 +91,5 @@ jobs:
           node scripts/check-import.mjs
           node scripts/check-tally.mjs
           node scripts/check-security.mjs
+          node scripts/check-http-security.mjs
           pnpm exec tsc --noEmit

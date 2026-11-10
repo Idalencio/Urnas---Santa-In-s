@@ -1,3 +1,4 @@
+import { imageSize } from 'image-size';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import ts from 'typescript';
@@ -26,6 +27,7 @@ class Statement {
     return { meta: { changes: Number(result.changes) } };
   }
 }
+globalThis.__URNA_IMAGE_SIZE = imageSize;
 globalThis.__DEMO_TEST_ENV = {
   DB: {
     prepare: (q) => new Statement(q),
@@ -45,6 +47,10 @@ globalThis.__DEMO_TEST_ENV = {
   DEMO_PASSWORD: 'SenhaFicticiaQA!42',
 };
 let source = readFileSync('lib/demo-api.ts', 'utf8')
+  .replace(
+    "import { imageSize } from 'image-size';",
+    'const imageSize=(globalThis as any).__URNA_IMAGE_SIZE;',
+  )
   .replace(/import\s*\{\s*env\s+as\s+bindings\s*\}\s*from\s*['"]cloudflare:workers['"];?/, '')
   .replace(
     /const\s+env\s*=\s*bindings\s+as\s+any;/,

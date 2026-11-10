@@ -189,7 +189,7 @@ function body(int $limit = 4096): array
     if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > $limit) {
         fail('Solicitação muito grande.', 413);
     }
-    if (!str_starts_with(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json')) {
+    if (strtolower(trim(explode(';', $_SERVER['CONTENT_TYPE'] ?? '')[0])) !== 'application/json') {
         fail('Envie uma solicitação JSON.', 415);
     }
     $raw = file_get_contents('php://input', false, null, 0, $limit + 1);

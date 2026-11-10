@@ -1,3 +1,4 @@
+import { imageSize } from 'image-size';
 import { env as bindings } from 'cloudflare:workers';
 const env = bindings as any;
 const enc = new TextEncoder();
@@ -108,11 +109,35 @@ function matricula(v: any) {
 }
 /** Lê o documento JSON e sua revisão; este banco de teste é separado do MySQL. */
 async function load() {
-  const r = await DB()
-    .prepare("SELECT value,revision FROM demo_state WHERE id='main'")
-    .first<any>();
-  if (!r) fail('Entre no painel para preparar o ambiente de testes.', 503);
-  return { s: JSON.parse(r.value), revision: r.revision, raw: r.value };
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const r = await DB()
+      .prepare("SELECT value,revision FROM demo_state WHERE id='main'")
+      .first<any>();
+    if (!r) fail('Entre no painel para preparar o ambiente de testes.', 503);
+    const s = JSON.parse(r.value);
+    if (!Object.prototype.hasOwnProperty.call(s, 'mfa'))
+      return { s, revision: r.revision, raw: r.value };
+    // Retira somente credenciais da funcionalidade descontinuada. Preserva votos e cadastros.
+    for (const [id, m] of Object.entries(s.mfa || {}) as [string, any][])
+      if (m?.enabled) {
+        const a = id === 'demo-admin' ? s : (s.accounts || []).find((a: any) => a.id === id);
+        if (a) a.authVersion = Number(a.authVersion || 1) + 1;
+      }
+    delete s.mfa;
+    const raw = JSON.stringify(s);
+    const [updated] = await DB().batch([
+      DB()
+        .prepare("UPDATE demo_state SET value=?,revision=revision+1 WHERE id='main' AND revision=?")
+        .bind(raw, r.revision),
+      DB()
+        .prepare(
+          "INSERT INTO admin_audit (id,occurred_at,actor_id,actor_name,action,target_type,target_id,election_id,details) SELECT ?,?,'system','Atualização do sistema','securityUpdated','system','','','{}' WHERE changes()=1",
+        )
+        .bind(uuid(), date()),
+    ]);
+    if (updated.meta.changes === 1) return { s, revision: r.revision + 1, raw };
+  }
+  fail('Há outra operação em andamento. Tente novamente.', 409);
 }
 /** Compare-and-swap: repete a leitura se outra escrita mudou a revisão do estado. */
 async function mutate(fn: (s: any) => any, audit?: any) {
@@ -343,7 +368,6 @@ function profile(a: any, s: any) {
     role: a.role,
     active: a.active,
     owner: a.owner || 0,
-    mfaEnabled: !!s.mfa?.[a.id]?.enabled,
     permissions: a.role === 'admin' ? PERMISSIONS : a.permissions || [],
     classes:
       a.role === 'admin'
@@ -704,15 +728,59 @@ function validImage(s: string) {
     !s || /^\/characters\/(lion|owl|fox)\.svg$/.test(s) || /^\/api\/images\/[a-f0-9-]{36}$/.test(s)
   );
 }
+function readableImage(s: any, me: any, path: string): boolean {
+  if (me.role === 'admin') return true;
+  const id = path.split('/').pop()!;
+  if (can(me, 'manageElections') && s.imageOwners?.[id] === me.id) return true;
+  return s.elections.some(
+    (e: any) =>
+      hasElection(me, e) &&
+      [...(e.candidates || []), ...(e.candidateSnapshot || [])].some((c: any) =>
+        [c.image, c.viceImage].includes(path),
+      ),
+  );
+}
 async function upload(b: any) {
   const match =
     typeof b.imageData === 'string' &&
     b.imageData.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/);
   if (!match) fail('Escolha PNG, JPG ou WebP.');
-  const data = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+  let data: Uint8Array;
+  try {
+    data = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+  } catch {
+    fail('Imagem inválida.');
+  }
   if (data.length > 2097152 || data.length < 12) fail('Envie imagem de até 2 MB.');
+  let dimensions: any;
+  try {
+    dimensions = imageSize(data);
+  } catch {
+    fail('Envie uma imagem PNG, JPEG ou WebP válida.');
+  }
+  const mime = (
+    { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as any
+  )[dimensions.type];
+  if (
+    !mime ||
+    mime !== match[1] ||
+    !(dimensions.width > 0 && dimensions.height > 0) ||
+    dimensions.width > 6000 ||
+    dimensions.height > 6000 ||
+    dimensions.width * dimensions.height > 20000000
+  )
+    fail('Envie uma imagem válida de até 20 megapixels e 6000 pixels por lado.');
+  const tail = String.fromCharCode(...data.slice(-8));
+  if (
+    (mime === 'image/jpeg' && !(data[data.length - 2] === 255 && data[data.length - 1] === 217)) ||
+    (mime === 'image/png' && tail !== 'IEND\xaeB`\x82') ||
+    (mime === 'image/webp' &&
+      new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(4, true) + 8 !==
+        data.length)
+  )
+    fail('Imagem incompleta ou inválida.');
   const id = uuid();
-  await env.BUCKET.put(id, data, { httpMetadata: { contentType: match[1] } });
+  await env.BUCKET.put(id, data, { httpMetadata: { contentType: mime } });
   return { image: '/api/images/' + id };
 }
 async function admin(req: Request, b: any) {
@@ -729,7 +797,16 @@ async function admin(req: Request, b: any) {
   }
   if (action === 'image') {
     const image = await upload(b);
-    await mutate(() => ({ ok: true }), adminEvent(me, action, b));
+    await mutate(
+      (st) => {
+        const current = profile(account(st, me.id), st);
+        access(st, current, action, b);
+        st.imageOwners ||= {};
+        st.imageOwners[image.image.split('/').pop()!] = me.id;
+        return { ok: true };
+      },
+      adminEvent(me, action, b),
+    );
     return json(image);
   }
   if (action === 'csvPreview') {
@@ -823,6 +900,9 @@ async function admin(req: Request, b: any) {
           fail('Informe nome e número válido, sem zero automático.');
         if (e.hasVice && !viceName) fail('Informe o vice.');
         if (!validImage(image) || !validImage(viceImage)) fail('Imagem inválida.');
+        for (const path of [image, viceImage])
+          if (path.startsWith('/api/images/') && !readableImage(s, current, path))
+            fail('Imagem não disponível para sua conta.', 403);
         if (e.candidates.some((c: any) => c.code === code && c.id !== v.id))
           fail('Número já cadastrado nesta eleição.');
         const c = {
@@ -1021,15 +1101,34 @@ async function publicTerminal(req: Request, id: string, b: any) {
       t = terminal(s, id),
       choices = terminalChoices(s, id),
       requested = new URL(req.url).searchParams.get('election') || '',
-      e = requested || choices.length === 1 ? clone(resolveElection(s, id, requested)) : null;
-    if (e) {
-      delete e.candidates;
-      delete e.ownerId;
-      e.results = [];
-      e.status = status(e);
-      if (e.status !== 'active') e.candidateSnapshot = [];
-    }
-    return json({ terminal: t, election: e, elections: choices });
+      chosen = requested || choices.length === 1 ? resolveElection(s, id, requested) : null;
+    const e = chosen
+      ? {
+          id: chosen.id,
+          name: chosen.name,
+          digits: chosen.digits,
+          hasVice: chosen.hasVice,
+          requireMatricula: chosen.requireMatricula,
+          published: chosen.published,
+          closed: chosen.closed,
+          startsAt: chosen.startsAt,
+          endsAt: chosen.endsAt,
+          status: status(chosen),
+          candidateSnapshot: status(chosen) === 'active' ? clone(chosen.candidateSnapshot) : [],
+          results: [],
+        }
+      : null;
+    return json({
+      terminal: {
+        id: t.id,
+        name: t.name,
+        location: t.location,
+        model: t.model,
+        electionId: t.electionId,
+      },
+      election: e,
+      elections: choices,
+    });
   }
   const action = b.action || 'vote';
   let gate: string | null = null,
@@ -1063,7 +1162,7 @@ async function publicTerminal(req: Request, id: string, b: any) {
           409,
         );
       Object.assign(r, { gateHash, expires: Date.now() + 300000, terminalId: id });
-      return { ok: true, gate, name: r.name, className: r.className, expiresIn: 300 };
+      return { ok: true, gate, expiresIn: 300 };
     }
     if (action !== 'vote') fail('Ação inválida.');
     if (
@@ -1188,216 +1287,52 @@ async function auditEndpoint(req: Request) {
     limit: 50,
   });
 }
-const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-function base32(bytes: Uint8Array) {
-  let buffer = 0,
-    bits = 0,
-    out = '';
-  for (const b of bytes) {
-    buffer = (buffer << 8) | b;
-    bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      out += B32[(buffer >>> bits) & 31];
-    }
-    buffer &= (1 << bits) - 1;
-  }
-  if (bits) out += B32[(buffer << (5 - bits)) & 31];
-  return out;
-}
-function unbase32(secret: string) {
-  let buffer = 0,
-    bits = 0;
-  const out = [];
-  for (const c of secret) {
-    const n = B32.indexOf(c);
-    if (n < 0) fail('Autenticador inválido.', 503);
-    buffer = (buffer << 5) | n;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      out.push((buffer >>> bits) & 255);
-    }
-    buffer &= (1 << bits) - 1;
-  }
-  return new Uint8Array(out);
-}
-async function totp(secret: string, step: number, digits = 6) {
-  const counter = new Uint8Array(8),
-    view = new DataView(counter.buffer);
-  view.setUint32(0, Math.floor(step / 4294967296));
-  view.setUint32(4, step >>> 0);
-  const key = await crypto.subtle.importKey(
-    'raw',
-    unbase32(secret),
-    { name: 'HMAC', hash: 'SHA-1' },
-    false,
-    ['sign'],
-  );
-  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, counter)),
-    offset = mac[19] & 15;
-  const value =
-    (((mac[offset] & 127) << 24) |
-      (mac[offset + 1] << 16) |
-      (mac[offset + 2] << 8) |
-      mac[offset + 3]) >>>
-    0;
-  return String(value % 10 ** digits).padStart(digits, '0');
-}
-async function mfaStep(secret: string, code: any, last = -1) {
-  if (typeof code !== 'string' || !/^\d{6}$/.test(code))
-    fail('Código inválido. Confira o autenticador ou use um código de recuperação.', 401);
-  const step = Math.floor(Date.now() / 30000);
-  for (const n of [step, step - 1, step + 1])
-    if (n > last && (await totp(secret, n)) === code) return n;
-  fail('Código inválido ou já utilizado. Aguarde o próximo código.', 401);
-}
-async function mfaKey() {
-  if (
-    typeof env.MFA_ENCRYPTION_KEY !== 'string' ||
-    !/^([a-f0-9]{64})$/.test(env.MFA_ENCRYPTION_KEY)
-  )
-    fail('Proteção em duas etapas indisponível. Procure a T.I.', 503);
-  const bytes = Uint8Array.from(env.MFA_ENCRYPTION_KEY.match(/../g), (s: any) => parseInt(s, 16));
-  return crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
-}
-async function encryptMfa(secret: string) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const out = new Uint8Array(
-    await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv, additionalData: enc.encode('urna-mfa-v1') },
-      await mfaKey(),
-      enc.encode(secret),
-    ),
-  );
-  return 'v1:' + btoa(String.fromCharCode(...iv, ...out));
-}
-async function decryptMfa(value: string) {
-  try {
-    const bytes = Uint8Array.from(atob(value.slice(3)), (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(
-      await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: enc.encode('urna-mfa-v1') },
-        await mfaKey(),
-        bytes.slice(12),
-      ),
-    );
-  } catch {
-    fail('Autenticador indisponível. Procure a T.I.', 503);
-  }
-}
-async function consumeMfa(m: any, code: any) {
-  const normalized = typeof code === 'string' ? code.trim().toLowerCase().replace(/-/g, '') : '';
-  if (/^[a-f0-9]{32}$/.test(normalized)) {
-    const digest = await hash(normalized),
-      i = (m.recovery || []).indexOf(digest);
-    if (i < 0) fail('Código de recuperação inválido ou já utilizado.', 401);
-    m.recovery.splice(i, 1);
-  } else m.lastStep = await mfaStep(await decryptMfa(m.secret), code, m.lastStep ?? -1);
-}
-async function mfaAuth(req: Request, b: any) {
-  const me = await user(req),
-    { s } = await load(),
-    a = account(s, me.id),
-    action = b.action;
-  if (action === 'mfaStatus') {
-    const m = s.mfa?.[me.id];
-    return json({ enabled: !!m?.enabled, remaining: m?.recovery?.length || 0 });
-  }
-  await throttle('mfa-account:' + me.id, 8, 900000);
-  if (!(await verifyPass(b.currentPassword, a.password)))
-    fail('Sua senha atual está incorreta.', 401);
-  let secret = '',
-    encrypted = '',
-    codes: string[] = [],
-    hashes: string[] = [];
-  if (action === 'mfaBegin') {
-    secret = base32(crypto.getRandomValues(new Uint8Array(20)));
-    encrypted = await encryptMfa(secret);
-  }
-  if (['mfaConfirm', 'mfaRecovery'].includes(action)) {
-    codes = Array.from({ length: 10 }, () =>
-      [...crypto.getRandomValues(new Uint8Array(16))]
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
-        .match(/.{8}/g)!
-        .join('-'),
-    );
-    hashes = await Promise.all(codes.map((c) => hash(c.replace(/-/g, ''))));
-  }
-  const panelHash = await hash(req.headers.get('x-urna-panel') || '');
-  const result = await mutate(
-    async (st) => {
-      const current = account(st, me.id);
-      if (current.authVersion !== a.authVersion) fail('Entre novamente.', 401);
-      st.mfa ||= {};
-      const m = (st.mfa[me.id] ||= { enabled: false, recovery: [], lastStep: -1 });
-      if (action === 'mfaBegin') {
-        if (m.enabled) fail('A proteção em duas etapas já está ativa.', 409);
-        m.pending = encrypted;
-        m.pendingUntil = Date.now() + 600000;
-        m.pendingPanel = panelHash;
-        return {
-          secret,
-          uri:
-            'otpauth://totp/' +
-            encodeURIComponent('Santa Inês:' + me.username) +
-            '?secret=' +
-            secret +
-            '&issuer=Santa%20In%C3%AAs&algorithm=SHA1&digits=6&period=30',
-        };
-      }
-      if (action === 'mfaConfirm') {
-        if (m.enabled || !m.pending || m.pendingUntil < Date.now() || m.pendingPanel !== panelHash)
-          fail('A configuração expirou. Inicie novamente.', 409);
-        m.lastStep = await mfaStep(await decryptMfa(m.pending), b.code);
-        m.enabled = true;
-        m.secret = m.pending;
-      } else if (['mfaDisable', 'mfaRecovery'].includes(action)) {
-        if (!m.enabled) fail('Ative a proteção em duas etapas primeiro.', 409);
-        await consumeMfa(m, b.code);
-      } else fail('Ação inválida.');
-      m.pending = null;
-      m.pendingUntil = 0;
-      m.pendingPanel = null;
-      m.recovery = hashes;
-      if (action === 'mfaDisable') {
-        m.enabled = false;
-        m.secret = null;
-        m.lastStep = -1;
-      }
-      const target = me.id === 'demo-admin' ? st : account(st, me.id);
-      target.authVersion++;
-      return { version: target.authVersion, enabled: m.enabled, remaining: hashes.length, codes };
-    },
-    { me, action, id: me.id },
-  );
-  if (action === 'mfaBegin') return json(result);
-  const response = await session(result.version, req, me.id),
-    data = (await response.json()) as any;
-  return json(
-    { ...data, enabled: result.enabled, remaining: result.remaining, codes: result.codes },
-    200,
-    { 'Set-Cookie': response.headers.get('Set-Cookie')! },
-  );
-}
-
 export async function endpoint(req: Request) {
   try {
     const path = new URL(req.url).pathname;
+    if (!['GET', 'POST'].includes(req.method)) fail('Método não permitido.', 405);
     let b: any = {};
     if (req.method === 'POST') {
       if (req.headers.get('origin') !== new URL(req.url).origin)
         fail('Origem da solicitação inválida.', 403);
-      if (Number(req.headers.get('content-length') || 0) > 2850000)
-        fail('Arquivo muito grande.', 413);
-      const raw = await req.text();
-      if (enc.encode(raw).length > 2850000) fail('Arquivo muito grande.', 413);
-      try {
-        b = JSON.parse(raw);
-      } catch {
-        fail('JSON inválido.');
+      if (
+        (req.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() !==
+        'application/json'
+      )
+        fail('Envie uma solicitação JSON.', 415);
+      const limit = path === '/api/auth' ? 4096 : 2850000;
+      if (Number(req.headers.get('content-length') || 0) > limit)
+        fail('Solicitação muito grande.', 413);
+      const reader = req.body?.getReader(),
+        chunks: Uint8Array[] = [];
+      let size = 0;
+      if (reader)
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > limit) {
+              await reader.cancel();
+              fail('Solicitação muito grande.', 413);
+            }
+            chunks.push(value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const c of chunks) {
+        bytes.set(c, offset);
+        offset += c.length;
       }
+      try {
+        b = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+      } catch {
+        fail('Solicitação inválida.');
+      }
+      if (!b || typeof b !== 'object' || Array.isArray(b)) fail('Solicitação inválida.');
     }
     if (path === '/api/auth') {
       if (req.method !== 'POST') fail('Método não permitido.', 405);
@@ -1414,16 +1349,15 @@ export async function endpoint(req: Request) {
         await throttle('login-account:' + username, 12, 900000);
         if (!a || !(await verifyPass(b.password, a.password)))
           fail('Usuário ou senha incorretos.', 401);
-        const required = await mutate(async (st) => {
-          const current = account(st, a.id);
-          if (current.authVersion !== a.authVersion) fail('Entre novamente.', 401);
-          const m = st.mfa?.[a.id];
-          if (m?.enabled && !b.code) return true;
-          if (m?.enabled) await consumeMfa(m, b.code);
-          return false;
-        });
-        if (required) return json({ ok: true, mfaRequired: true });
-        await mutate(() => ({ ok: true }), { me: profile(a, s), action: 'login', id: a.id });
+        await mutate(
+          (st) => {
+            const current = account(st, a.id);
+            if (current.authVersion !== a.authVersion || current.password !== a.password)
+              fail('Entre novamente.', 401);
+            return { ok: true };
+          },
+          { me: profile(a, s), action: 'login', id: a.id },
+        );
         return await session(a.authVersion, req, a.id);
       }
       if (b.action === 'logout') {
@@ -1445,7 +1379,7 @@ export async function endpoint(req: Request) {
           'Set-Cookie': '__Host-urna_demo=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0',
         });
       }
-      if (String(b.action).startsWith('mfa')) return await mfaAuth(req, b);
+      if (String(b.action).startsWith('mfa')) fail('Esta operação não está disponível.', 410);
       if (b.action === 'password') {
         const me = await user(req),
           { s } = await load(),
@@ -1464,7 +1398,6 @@ export async function endpoint(req: Request) {
               const target = me.id === 'demo-admin' ? st : account(st, me.id);
               if (target.password !== a.password)
                 fail('A senha foi alterada. Entre novamente.', 409);
-              if (st.mfa?.[me.id]?.enabled) await consumeMfa(st.mfa[me.id], b.code);
               target.password = password;
               return ++target.authVersion;
             },
@@ -1481,6 +1414,7 @@ export async function endpoint(req: Request) {
         const me = await user(req);
         return json(state((await load()).s, me));
       }
+      if (req.method !== 'POST') fail('Método não permitido.', 405);
       return await admin(req, b);
     }
     const t = path.match(/^\/api\/v2\/urna\/([a-zA-Z0-9-]+)$/);
@@ -1488,12 +1422,11 @@ export async function endpoint(req: Request) {
     const image = path.match(/^\/api\/images\/([a-zA-Z0-9-]+)$/);
     if (image && req.method === 'GET') {
       let allowed = false;
+      const { s } = await load();
       try {
-        await user(req, false);
-        allowed = true;
+        allowed = readableImage(s, await user(req, false), path);
       } catch {}
       if (!allowed) {
-        const { s } = await load();
         allowed = s.elections.some(
           (e: any) =>
             status(e) === 'active' &&
@@ -1507,7 +1440,9 @@ export async function endpoint(req: Request) {
         headers: {
           'Content-Type': object.httpMetadata?.contentType || 'image/png',
           'X-Content-Type-Options': 'nosniff',
-          'Cache-Control': 'private, max-age=60',
+          'Cache-Control': 'no-store',
+          'Cross-Origin-Resource-Policy': 'same-origin',
+          'Content-Disposition': 'inline',
         },
       });
     }

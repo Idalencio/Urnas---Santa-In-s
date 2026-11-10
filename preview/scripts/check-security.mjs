@@ -1,8 +1,8 @@
+import { imageSize } from 'image-size';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
 const sql = new DatabaseSync(':memory:');
 for (const f of readdirSync('drizzle')
   .filter((f) => f.endsWith('.sql'))
@@ -27,6 +27,7 @@ class Statement {
     return { meta: { changes: Number(result.changes) } };
   }
 }
+globalThis.__URNA_IMAGE_SIZE = imageSize;
 globalThis.__DEMO_TEST_ENV = {
   DB: {
     prepare: (q) => new Statement(q),
@@ -43,20 +44,22 @@ globalThis.__DEMO_TEST_ENV = {
       }
     },
   },
-  MFA_ENCRYPTION_KEY: '0123456789abcdef'.repeat(4),
   DEMO_PASSWORD: 'SenhaFicticiaQA!42',
 };
 let source = readFileSync('lib/demo-api.ts', 'utf8')
+  .replace(
+    "import { imageSize } from 'image-size';",
+    'const imageSize=(globalThis as any).__URNA_IMAGE_SIZE;',
+  )
   .replace(/import\s*\{\s*env\s+as\s+bindings\s*\}\s*from\s*['"]cloudflare:workers['"];?/, '')
   .replace(
     /const\s+env\s*=\s*bindings\s+as\s+any;/,
     'const env=(globalThis as any).__DEMO_TEST_ENV;',
   );
-source += '\nexport {totp};';
 const js = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { endpoint, totp } = await import(
+const { endpoint } = await import(
   'data:text/javascript;base64,' + Buffer.from(js).toString('base64')
 );
 let cookie = '',
@@ -85,157 +88,281 @@ function ok(condition, name) {
   assert.ok(condition, name);
   passed++;
 }
-function otp(secret, step = Math.floor(Date.now() / 30000)) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = '';
-  for (const c of secret) bits += alphabet.indexOf(c).toString(2).padStart(5, '0');
-  const key = Buffer.from(bits.match(/.{8}/g).map((b) => parseInt(b, 2))),
-    counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(step));
-  const h = createHmac('sha1', key).update(counter).digest(),
-    i = h[19] & 15;
-  return String((h.readUInt32BE(i) & 0x7fffffff) % 1000000).padStart(6, '0');
-}
-for (const [time, expected] of [
-  [59, '94287082'],
-  [1111111109, '07081804'],
-  [1111111111, '14050471'],
-  [1234567890, '89005924'],
-  [2000000000, '69279037'],
-  [20000000000, '65353130'],
-])
-  ok(
-    (await totp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', Math.floor(time / 30), 8)) === expected,
-    'RFC 6238 ' + time,
-  );
+const objects = new Map();
+globalThis.__DEMO_TEST_ENV.BUCKET = {
+  async put(id, data, options) {
+    objects.set(id, { body: data, httpMetadata: options.httpMetadata });
+  },
+  async get(id) {
+    return objects.get(id) || null;
+  },
+};
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6tNEAAAAASUVORK5CYII=';
+const PW = 'SenhaFicticiaQA!42',
+  auth = (action, payload = {}) => call('/api/auth', { action, ...payload }),
+  app = (action, payload = {}) => call('/api/v2/app', { action, ...payload });
 function use(r) {
   assert.equal(r.status, 200, JSON.stringify(r.body));
   cookie = r.headers.get('set-cookie').split(';')[0];
   panel = r.body.panelKey;
 }
-const auth = (action, payload = {}) => call('/api/auth', { action, ...payload }),
-  app = (action, payload = {}) => call('/api/v2/app', { action, ...payload });
-const PW = 'SenhaFicticiaQA!42';
+function saved() {
+  return { cookie, panel };
+}
+function restore(v) {
+  ({ cookie, panel } = v);
+}
 let r = await auth('login', { username: 'admin', password: PW });
 use(r);
-const owner = { cookie, panel };
-ok((await auth('mfaStatus')).body.enabled === false, 'MFA inicialmente opcional');
-ok((await auth('mfaBegin', { currentPassword: 'errada' })).status === 401, 'Exige senha atual');
-r = await auth('mfaBegin', { currentPassword: PW });
-assert.equal(r.status, 200);
-const seed = r.body.secret;
-ok(seed.length === 32 && r.body.uri.startsWith('otpauth://totp/'), 'Enrollment TOTP interoperável');
-const before = sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value;
+let owner = saved();
+ok(!!r.body.panelKey && !r.body.mfaRequired, 'Login sem segundo fator');
+for (const action of ['mfaStatus', 'mfaBegin', 'mfaConfirm', 'mfaRecovery', 'mfaDisable'])
+  ok((await auth(action)).status === 410, 'Operação retirada: ' + action);
+// Recreate an old encrypted configuration in a disposable JSON state; next read retires it.
+let old = JSON.parse(sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value),
+  ballots = JSON.stringify(old.ballots),
+  students = JSON.stringify(old.students);
+old.mfa = {
+  'demo-admin': { enabled: true, secret: 'seed-ficticio-cifrado', recovery: ['hash-ficticio'] },
+};
+sql.prepare("UPDATE demo_state SET value=? WHERE id='main'").run(JSON.stringify(old));
 ok(
-  !before.includes(seed) && JSON.parse(before).mfa['demo-admin'].pending.startsWith('v1:'),
-  'Seed criptografado em repouso',
+  (await call('/api/v2/app')).status === 401,
+  'Retirada da configuração antiga revoga sessão anterior',
 );
 r = await auth('login', { username: 'admin', password: PW });
 use(r);
+owner = saved();
+let current = JSON.parse(sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value);
 ok(
-  (await auth('mfaConfirm', { currentPassword: PW, code: otp(seed) })).status === 409,
-  'Enrollment vinculado à aba',
+  !Object.hasOwn(current, 'mfa') &&
+    JSON.stringify(current.ballots) === ballots &&
+    JSON.stringify(current.students) === students,
+  'Retirada elimina credenciais antigas e preserva dados',
 );
-({ cookie, panel } = owner);
+async function staff(username) {
+  restore(owner);
+  let a = await app('account', {
+    value: {
+      name: username,
+      username,
+      password: 'FicticiaPrivacidade!42',
+      role: 'staff',
+      active: 1,
+      permissions: ['manageElections', 'manageVoters', 'publishElections', 'viewResults'],
+      classes: null,
+      electionIds: [],
+    },
+  });
+  assert.equal(a.status, 200);
+  use(await auth('login', { username, password: 'FicticiaPrivacidade!42' }));
+  return { id: a.body.id, ...saved() };
+}
+const team = await staff('equipe.qa'),
+  other = await staff('outra.qa');
+restore(team);
+r = await call('/api/v2/app');
 ok(
-  (await auth('mfaConfirm', { currentPassword: PW, code: 'x' })).status === 401,
-  'Código incorreto não ativa MFA',
+  r.body.students.length === 0 && r.body.accounts.length === 0,
+  'Equipe sem cadastro geral nem contas',
 );
-const realNow = Date.now;
-let now = Date.now();
-Date.now = () => now;
-now += 601000;
+ok((await call('/api/v2/audit')).status === 403, 'Histórico exclusivo de administrador');
 ok(
-  (await auth('mfaConfirm', { currentPassword: PW, code: otp(seed) })).status === 409,
-  'Enrollment expira após 10 minutos',
+  (await call('/api/v2/audit?action=account&actor=' + team.id)).status === 403,
+  'Filtros não contornam acesso ao histórico',
 );
-now -= 601000;
-r = await auth('mfaBegin', { currentPassword: PW });
-assert.equal(r.status, 200);
-const secret = r.body.secret;
-r = await auth('mfaConfirm', {
-  currentPassword: PW,
-  code: otp(secret, Math.floor(now / 30000) - 1),
-});
-const codes = r.body.codes;
-use(r);
-const secured = { cookie, panel };
-ok(codes.length === 10 && r.body.enabled, 'Ativação com dez códigos de recuperação');
-({ cookie, panel } = owner);
-ok((await call('/api/v2/app')).status === 401, 'Sessão antiga revogada');
-({ cookie, panel } = secured);
-let raw = sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value;
+restore(owner);
+r = await call('/api/v2/audit');
 ok(
-  ![secret, ...codes, ...codes.map((c) => c.replace(/-/g, ''))].some((x) => raw.includes(x)),
-  'Segredo cifrado e recuperação com hash',
+  r.status === 200 && r.body.rows.some((r) => r.action === 'securityUpdated'),
+  'Histórico de atualização disponível ao administrador',
 );
-r = await auth('login', { username: 'admin', password: PW });
-ok(
-  r.status === 200 && r.body.mfaRequired && !r.body.panelKey && !r.headers.get('set-cookie'),
-  'Senha isolada não cria sessão',
-);
-ok(
-  (await auth('login', { username: 'admin', password: PW, code: 'bad' })).status === 401,
-  'Código inválido recusado',
-);
-const current = otp(secret);
-r = await auth('login', { username: 'admin', password: PW, code: current });
-ok(r.status === 200 && !!r.body.panelKey, 'TOTP permite acesso');
-ok(
-  (await auth('login', { username: 'admin', password: PW, code: current })).status === 401,
-  'TOTP não reutilizável',
-);
-r = await auth('login', { username: 'admin', password: PW, code: codes[0] });
-use(r);
-ok((await auth('mfaStatus')).body.remaining === 9, 'Recuperação decrementada');
-ok(
-  (await auth('login', { username: 'admin', password: PW, code: codes[0] })).status === 401,
-  'Recuperação de uso único',
-);
-ok(
-  (
-    await auth('password', {
-      currentPassword: PW,
-      newPassword: 'NovaFicticiaSeguro!42',
-      confirmPassword: 'NovaFicticiaSeguro!42',
-    })
-  ).status === 401,
-  'Troca de senha exige segundo fator',
-);
-now += 900001;
-r = await auth('mfaRecovery', { currentPassword: PW, code: codes[1] });
-use(r);
-const fresh = r.body.codes;
-ok(fresh.length === 10 && !fresh.some((c) => codes.includes(c)), 'Renovação gera outros códigos');
-ok(
-  (await auth('login', { username: 'admin', password: PW, code: codes[2] })).status === 401,
-  'Renovação revoga códigos antigos',
-);
-sql.exec(
-  "CREATE TRIGGER reject_audit BEFORE INSERT ON admin_audit BEGIN SELECT RAISE(ABORT,'audit unavailable'); END",
-);
-r = await auth('mfaDisable', { currentPassword: PW, code: fresh[0] });
-ok(r.status === 500, 'Falha no histórico impede desativação');
-ok(
-  (await auth('mfaStatus')).body.enabled && (await auth('mfaStatus')).body.remaining === 10,
-  'Falha preserva MFA e recuperação',
-);
-sql.exec('DROP TRIGGER reject_audit');
-r = await auth('mfaDisable', { currentPassword: PW, code: fresh[0] });
-use(r);
-ok(!r.body.enabled && r.body.codes.length === 0, 'Desativação confirmada');
+ok((await call('/api/v2/audit', undefined, false)).status === 401, 'Histórico exige login');
+ok((await call('/api/v2/audit', {})).status === 405, 'Histórico somente leitura');
+r = await app('image', { imageData: 'data:image/png;base64,' + PNG });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const image = r.body.image;
+ok((await call(image, undefined, false)).status === 403, 'Envio sem vínculo não é público');
 r = await app('election', {
-  value: { name: 'Histórico QA', digits: 2, hasVice: 0, requireMatricula: 0 },
+  value: { name: 'Privada QA', digits: 2, hasVice: 0, requireMatricula: 0 },
+});
+const privateId = r.body.id;
+assert.equal(r.status, 200);
+r = await app('candidate', {
+  value: {
+    electionId: privateId,
+    name: 'Privado',
+    code: '1',
+    image,
+    viceName: '',
+    viceImage: '',
+    active: 1,
+  },
+});
+assert.equal(r.status, 200);
+restore(team);
+ok((await call(image)).status === 403, 'Equipe não lê foto de eleição alheia');
+r = await app('election', {
+  value: { name: 'Da equipe', digits: 2, hasVice: 0, requireMatricula: 0 },
 });
 assert.equal(r.status, 200);
 const eid = r.body.id;
-await app('deleteElection', { electionId: eid });
-r = await call('/api/v2/audit?election=' + eid);
+r = await app('candidate', {
+  value: {
+    electionId: eid,
+    name: 'Tentativa',
+    code: '1',
+    image,
+    viceName: '',
+    viceImage: '',
+    active: 1,
+  },
+});
+ok(r.status === 403, 'Equipe não associa foto alheia');
+r = await app('image', { imageData: 'data:image/png;base64,' + PNG });
+assert.equal(r.status, 200);
+const ownImage = r.body.image;
+// Image bodies are binary. Use endpoint directly to verify owner and cache instead of the JSON test helper.
+async function photo(path, auth = true) {
+  return endpoint(
+    new Request('https://teste.example' + path, {
+      headers: auth ? { Cookie: cookie, 'X-Urna-Panel': panel } : {},
+    }),
+  );
+}
+r = await photo(ownImage);
 ok(
   r.status === 200 &&
-    ['election', 'deleteElection'].every((a) => r.body.rows.some((r) => r.action === a)),
-  'Histórico mantém eleição criada e excluída',
+    r.headers.get('Cache-Control') === 'no-store' &&
+    r.headers.get('X-Content-Type-Options') === 'nosniff',
+  'Foto do próprio envio sem cache',
 );
+restore(other);
+ok((await photo(ownImage)).status === 403, 'Outra conta não lê envio privado');
+restore(owner);
+for (const [mime, text] of [
+  ['image/png', '<html><script>alert(1)</script></html>'],
+  ['image/jpeg', '<?php echo 1; ?>'],
+  ['image/webp', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+])
+  ok(
+    (
+      await app('image', {
+        imageData: 'data:' + mime + ';base64,' + Buffer.from(text).toString('base64'),
+      })
+    ).status === 400,
+    'Recusa conteúdo falso ' + mime,
+  );
+ok(
+  (await app('image', { imageData: 'data:image/svg+xml;base64,PHN2Zy8+' })).status === 400,
+  'Recusa SVG',
+);
+ok(
+  (await app('image', { imageData: 'data:image/jpeg;base64,' + PNG })).status === 400,
+  'Recusa MIME divergente dos bytes',
+);
+let oversized = Buffer.from(PNG, 'base64');
+oversized.writeUInt32BE(7000, 16);
+ok(
+  (await app('image', { imageData: 'data:image/png;base64,' + oversized.toString('base64') }))
+    .status === 400,
+  'Recusa dimensões excessivas',
+);
+await app('csvImport', { csv: 'nome;turma;matricula\nNome Privado QA;Turma Privada QA;PRIV001\n' });
+r = await app('election', {
+  value: { name: 'Privacidade pública', digits: 2, hasVice: 0, requireMatricula: 1 },
+});
+assert.equal(r.status, 200);
+const publicId = r.body.id;
+await app('candidate', {
+  value: {
+    electionId: publicId,
+    name: 'Chapa pública',
+    code: '1',
+    image,
+    viceName: '',
+    viceImage: '',
+    active: 1,
+  },
+});
+await app('enroll', { electionId: publicId, classes: ['Turma Privada QA'] });
+r = await app('publish', {
+  electionId: publicId,
+  models: ['standard'],
+  startsAt: new Date(Date.now() - 60000).toISOString(),
+  endsAt: new Date(Date.now() + 3600000).toISOString(),
+});
+assert.equal(r.status, 200, JSON.stringify(r.body));
+r = await call('/api/v2/urna/urna-padrao?election=' + publicId, undefined, false);
+let raw = JSON.stringify(r.body);
+ok(
+  r.status === 200 &&
+    ![
+      'PRIV001',
+      'Nome Privado QA',
+      'Turma Privada QA',
+      'password',
+      'panelKey',
+      'gateHash',
+      'students',
+      'electors',
+      'imageOwners',
+    ].some((x) => raw.includes(x)),
+  'Urna pública sem cadastro privado',
+);
+r = await call(
+  '/api/v2/urna/urna-padrao',
+  { action: 'authorize', electionId: publicId, matricula: 'PRIV001' },
+  false,
+);
+ok(
+  r.status === 200 &&
+    JSON.stringify(Object.keys(r.body).sort()) === JSON.stringify(['expiresIn', 'gate', 'ok']),
+  'Liberação sem nome ou turma',
+);
+ok((await photo(image, false)).status === 200, 'Foto publicada permanece disponível');
+const malformed = async (body, headers = {}) =>
+  endpoint(
+    new Request('https://teste.example/api/auth', {
+      method: 'POST',
+      headers: { Origin: 'https://teste.example', 'Content-Type': 'application/json', ...headers },
+      body,
+    }),
+  );
+for (const body of ['null', '[]', '"texto"', '{broken'])
+  ok((await malformed(body)).status === 400, 'Recusa JSON inválido ' + body);
+ok(
+  (await malformed('{}', { 'Content-Type': 'text/plain' })).status === 415,
+  'Recusa tipo de conteúdo inadequado',
+);
+ok((await malformed('x'.repeat(5000))).status === 413, 'Limite de corpo sem Content-Length');
+r = await endpoint(
+  new Request('https://teste.example/api/v2/app', {
+    method: 'DELETE',
+    headers: { Cookie: cookie, 'X-Urna-Panel': panel },
+  }),
+);
+ok(r.status === 405, 'Método de escrita desconhecido recusado');
+r = await endpoint(
+  new Request('https://teste.example/api/v2/app', {
+    method: 'POST',
+    headers: {
+      Origin: 'https://outro.example',
+      'Content-Type': 'application/json',
+      Cookie: cookie,
+      'X-Urna-Panel': panel,
+    },
+    body: '{}',
+  }),
+);
+ok(r.status === 403, 'Origem externa bloqueada');
+r = await auth('login', { username: "' OR 1=1 --", password: 'incorreta' });
+ok(
+  r.status === 401 && !JSON.stringify(r.body).includes('SQL'),
+  'SQL na entrada não contorna login',
+);
+// Administrative data and its audit record must continue rolling back together.
 raw = sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value;
 sql.exec(
   "CREATE TRIGGER reject_audit BEFORE INSERT ON admin_audit BEGIN SELECT RAISE(ABORT,'audit unavailable'); END",
@@ -246,49 +373,32 @@ r = await app('election', {
 ok(
   r.status === 500 &&
     sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value === raw,
-  'Falha no log desfaz alteração',
+  'Falha de histórico desfaz alteração',
 );
 sql.exec('DROP TRIGGER reject_audit');
-const csv = 'nome;turma;matricula\nRegistro QA;QA;SEC001\n';
-await app('csvImport', { csv });
-await app('csvImport', { csv });
-r = await call('/api/v2/audit?action=csvImport');
-ok(
-  r.body.total === 2 && r.body.rows.every((r) => r.details.summary),
-  'Importação idêntica registrada',
-);
 r = await call('/api/v2/audit');
 raw = JSON.stringify(r.body);
 ok(
-  ['mfaConfirm', 'mfaRecovery', 'mfaDisable', 'login'].every((a) =>
-    r.body.rows.some((r) => r.action === a),
-  ),
-  'Mudanças de segurança auditadas',
-);
-ok(
-  ![PW, secret, seed, ...codes, ...fresh, 'panelKey', 'candidateId', 'gateHash'].some((x) =>
-    raw.includes(x),
-  ),
+  ![
+    PW,
+    'FicticiaPrivacidade!42',
+    'panelKey',
+    'gateHash',
+    'seed-ficticio-cifrado',
+    'candidateId',
+  ].some((x) => raw.includes(x)),
   'Histórico sem credenciais ou escolhas de voto',
 );
-ok((await call('/api/v2/audit', undefined, false)).status === 401, 'Histórico exige login');
-ok((await call('/api/v2/audit', {})).status === 405, 'Histórico somente leitura');
-ok((await call('/api/v2/audit?from=2026-02-31')).status === 400, 'Data inválida recusada');
-r = await app('account', {
-  value: {
-    name: 'Equipe QA',
-    username: 'audit.qa',
-    password: 'FicticiaStaff!42',
-    role: 'staff',
-    active: 1,
-    permissions: [],
-    classes: [],
-    electionIds: [],
-  },
+restore(team);
+const oldSession = saved();
+r = await auth('password', {
+  currentPassword: 'FicticiaPrivacidade!42',
+  newPassword: 'NovaFicticiaPrivacidade!42',
+  confirmPassword: 'NovaFicticiaPrivacidade!42',
 });
-assert.equal(r.status, 200);
-r = await auth('login', { username: 'audit.qa', password: 'FicticiaStaff!42' });
 use(r);
-ok((await call('/api/v2/audit')).status === 403, 'Equipe sem acesso ao histórico');
-Date.now = realNow;
-console.log(`Segurança D1: ${passed} verificações aprovadas.`);
+ok(!!r.body.panelKey && !r.body.mfaRequired, 'Senha alterada sem segundo fator');
+restore(oldSession);
+ok((await call('/api/v2/app')).status === 401, 'Troca de senha revoga sessões');
+use(await auth('login', { username: 'equipe.qa', password: 'NovaFicticiaPrivacidade!42' }));
+console.log(`Proteção de dados D1: ${passed} verificações aprovadas.`);

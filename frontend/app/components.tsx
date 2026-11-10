@@ -1,4 +1,5 @@
 'use client';
+import { csvCell } from './csv';
 import { X, Check, Vote, Images, Keyboard, ArrowRight } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: string }) {
@@ -207,8 +208,7 @@ export function formatted(s: string) {
   }).format(new Date(s));
 }
 export function csvDownload(filename: string, rows: unknown[][]) {
-  const esc = (v: unknown) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const blob = new Blob(['\uFEFF' + rows.map((r) => r.map(esc).join(';')).join('\r\n')], {
+  const blob = new Blob(['\uFEFF' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n')], {
     type: 'text/csv;charset=utf-8',
   });
   const u = URL.createObjectURL(blob);

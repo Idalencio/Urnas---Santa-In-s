@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ShieldCheck,
   Pencil,
   Copy,
   Upload,
@@ -951,15 +950,6 @@ export default function App() {
             <Login onReady={load} />
           ) : (
             <>
-              {isAdmin && !data.me.mfaEnabled && view !== 'account' && (
-                <div className="security-reminder">
-                  <ShieldCheck size={20} />
-                  <span>Proteja sua conta com a verificação em duas etapas.</span>
-                  <button className="button secondary" onClick={() => go('account')}>
-                    Ativar proteção
-                  </button>
-                </div>
-              )}
               {view === 'elections' && !e && !creating && (
                 <>
                   {error && (

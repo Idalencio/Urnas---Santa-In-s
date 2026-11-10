@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace Urna;
 
 /** Valida formato, bytes e dimensões; a imagem fica em storage/uploads. */
-function storeImage(string $bytes): string
+function storeImage(string $bytes, string $owner = ''): string
 {
     if (strlen($bytes) > 2 * 1024 * 1024 || strlen($bytes) < 12) {
         fail('Envie PNG, JPEG ou WebP de até 2 MB.');
@@ -29,9 +29,12 @@ function storeImage(string $bytes): string
         fail('Não foi possível salvar a imagem.', 503);
     }
     chmod($path, 0600);
+    if ($owner !== '') {
+        sql('INSERT INTO image_access (image_id,admin_id) VALUES (?,?)', [$id, $owner]);
+    }
     return '/api/images/' . $id;
 }
-function storeImageData(mixed $data): string
+function storeImageData(mixed $data, string $owner = ''): string
 {
     if (
         !is_string($data) ||
@@ -43,7 +46,7 @@ function storeImageData(mixed $data): string
     if ($bytes === false) {
         fail('Imagem inválida.');
     }
-    return storeImage($bytes);
+    return storeImage($bytes, $owner);
 }
 /** Entrega fotos ao painel ou às urnas enquanto a eleição correspondente está aberta. */
 function imageEndpoint(?string $id = null): never
@@ -62,7 +65,7 @@ function imageEndpoint(?string $id = null): never
         if ($f['size'] > 2 * 1024 * 1024) {
             fail('Arquivo muito grande.', 413);
         }
-        $image = storeImage(file_get_contents($f['tmp_name']));
+        $image = storeImage(file_get_contents($f['tmp_name']), $me['id']);
         transaction(fn() => auditWrite($me, 'image', 'image', basename($image)));
         reply(['image' => $image]);
     }
@@ -72,8 +75,7 @@ function imageEndpoint(?string $id = null): never
     }
     $allowed = false;
     try {
-        requireAdmin();
-        $allowed = true;
+        $allowed = imageReadable(requireAdmin(), '/api/images/' . $id);
     } catch (ApiError) {
     }
     if (!$allowed) {
@@ -126,8 +128,44 @@ function imageEndpoint(?string $id = null): never
         fail('Imagem inválida.', 404);
     }
     header('Content-Type: ' . $mime);
-    header('Cache-Control: private, max-age=60');
+    header('Cache-Control: no-store');
+    header('Cross-Origin-Resource-Policy: same-origin');
+    header('Content-Disposition: inline');
     header('Content-Length: ' . filesize($path));
     readfile($path);
     exit();
+}
+
+/** Autoriza a foto pelo proprietário ou por uma eleição liberada para a conta. */
+function imageReadable(array $me, string $path): bool
+{
+    if ($me['role'] === 'admin') {
+        return true;
+    }
+    if (
+        v2Can($me, 'manageElections') &&
+        one('SELECT image_id FROM image_access WHERE image_id=? AND admin_id=?', [
+            basename($path),
+            $me['id'],
+        ])
+    ) {
+        return true;
+    }
+    foreach (all('SELECT id,candidate_snapshot FROM v2_elections') as $e) {
+        if (!v2HasElection($me, $e['id'])) {
+            continue;
+        }
+        foreach (
+            [
+                ...v2Candidates($e['id']),
+                ...json_decode($e['candidate_snapshot'], true, 64, JSON_THROW_ON_ERROR),
+            ]
+            as $c
+        ) {
+            if (($c['image'] ?? '') === $path || ($c['viceImage'] ?? '') === $path) {
+                return true;
+            }
+        }
+    }
+    return false;
 }

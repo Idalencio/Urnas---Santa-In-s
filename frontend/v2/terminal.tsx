@@ -12,7 +12,7 @@ type ElectionOption = {
   startsAt: string;
   endsAt: string;
 };
-type Authorization = { gate: string; name: string; className: string; expires: number };
+type Authorization = { gate: string; expires: number };
 /**
  * Urna pública: escolhe a eleição, solicita a matrícula e mantém a liberação só em memória.
  * Ao concluir o voto, limpa a identificação e prepara a próxima participação.
@@ -125,13 +125,7 @@ export default function TerminalView({ id }: { id: string }) {
         <div className="v2-voter-strip">
           <LockKeyhole size={16} />
           <span>
-            {auth ? (
-              <>
-                Urna liberada para <strong>{auth.name}</strong> · {auth.className}
-              </>
-            ) : (
-              <>Modo aberto · {e.name}</>
-            )}
+            {auth ? <>Matrícula validada · votação liberada</> : <>Modo aberto · {e.name}</>}
           </span>
           {auth && (
             <button className="text-button" disabled={busy} onClick={() => cancel()}>
@@ -240,7 +234,7 @@ export default function TerminalView({ id }: { id: string }) {
               try {
                 const r = await post({ action: 'authorize', matricula });
                 setMatricula('');
-                setAuth({ ...r, expires: Date.now() + r.expiresIn * 1000 });
+                setAuth({ gate: r.gate, expires: Date.now() + r.expiresIn * 1000 });
               } catch (e: any) {
                 setError(e.message);
               } finally {

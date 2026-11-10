@@ -240,9 +240,6 @@ function authEndpoint(): never
     sameOrigin();
     $b = body();
     $action = $b['action'] ?? '';
-    if (str_starts_with((string) $action, 'mfa')) {
-        mfaAuth($b);
-    }
     if ($action === 'login') {
         throttle('login-ip:' . ($_SERVER['REMOTE_ADDR'] ?? ''), 12, 15);
         $username = strtolower(clean($b['username'] ?? '', 80));
@@ -271,8 +268,11 @@ function authEndpoint(): never
                         ) {
                             fail('Usuário ou senha incorretos.', 401);
                         }
-                        $result = mfaLogin($account['id'], $b);
+                        $result = passwordLogin($account['id']);
                         resetThrottle('login-ip:' . ($_SERVER['REMOTE_ADDR'] ?? ''));
+                        resetThrottle(
+                            'login-account:' . strtolower(clean($b['username'] ?? '', 80)),
+                        );
                         return $result;
                     }),
                 );
@@ -294,8 +294,9 @@ function authEndpoint(): never
                 if (!$p || !verifyPassword($b['password'] ?? null, $p['hash'])) {
                     fail('Usuário ou senha incorretos.', 401);
                 }
-                $result = mfaLogin(LOCAL_ADMIN_ID, $b);
+                $result = passwordLogin(LOCAL_ADMIN_ID);
                 resetThrottle('login-ip:' . ($_SERVER['REMOTE_ADDR'] ?? ''));
+                resetThrottle('login-account:' . strtolower(clean($b['username'] ?? '', 80)));
                 return $result;
             }),
         );
@@ -324,7 +325,6 @@ function authEndpoint(): never
                 if (!$p || !verifyPassword($b['currentPassword'] ?? null, $p['hash'])) {
                     fail('Sua senha atual está incorreta.', 401);
                 }
-                mfaConsume($me['id'], $b['code'] ?? null);
                 auditWrite($me, 'password', 'account', $me['id']);
                 sql(
                     'UPDATE admin_passwords SET hash=?,version=version+1,updated_at=? WHERE admin_id=?',
