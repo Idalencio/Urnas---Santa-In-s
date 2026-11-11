@@ -3,6 +3,13 @@ declare(strict_types=1);
 namespace Urna;
 
 const V2_PERMISSIONS = ['manageElections', 'manageVoters', 'publishElections', 'viewResults'];
+/** Organizar uma eleição inclui as etapas dependentes, sem conceder administração. */
+function v2Permissions(array $permissions): array
+{
+    return array_intersect($permissions, ['manageElections', 'manageVoters', 'publishElections'])
+        ? V2_PERMISSIONS
+        : array_values(array_intersect($permissions, ['viewResults']));
+}
 /** Traduz os escopos JSON e resolve nomes anteriores de turmas nas permissões. */
 function v2Profile(array $a): array
 {
@@ -18,7 +25,9 @@ function v2Profile(array $a): array
         'role' => $a['role'],
         'active' => (int) $a['active'],
         'owner' => (int) $a['owner'],
-        'permissions' => $admin ? V2_PERMISSIONS : json_decode($p['permissions'] ?? '[]', true),
+        'permissions' => $admin
+            ? V2_PERMISSIONS
+            : v2Permissions(json_decode($p['permissions'] ?? '[]', true)),
         'classes' => $admin
             ? null
             : (($scope = json_decode($p['class_scope'] ?? '[]', true)) === null
@@ -26,7 +35,7 @@ function v2Profile(array $a): array
                 : array_values(
                     array_unique(array_map(__NAMESPACE__ . '\\v2CanonicalClass', $scope)),
                 )),
-        'electionIds' => $admin ? [] : json_decode($p['election_ids'] ?? '[]', true),
+        'electionIds' => [],
     ];
 }
 function v2Can(array $me, string $permission): bool
@@ -52,9 +61,8 @@ function v2ClassAllowed(array $me, string $class): bool
 function v2HasElection(array $me, string $id): bool
 {
     return $me['role'] === 'admin' ||
-        in_array($id, $me['electionIds'] ?? [], true) ||
         (bool) one(
-            'SELECT election_id FROM v2_election_owners WHERE election_id=? AND admin_id=?',
+            'SELECT o.election_id FROM v2_election_owners o JOIN v2_elections e ON e.id=o.election_id WHERE o.election_id=? AND o.admin_id=? AND e.deleted_at IS NULL',
             [$id, $me['id']],
         );
 }
@@ -93,7 +101,7 @@ function v2SaveAccount(array $me, array $v): string
     $role = $v['role'] ?? 'staff';
     $permissions = $v['permissions'] ?? [];
     $classes = array_key_exists('classes', $v) ? $v['classes'] : [];
-    $ids = $v['electionIds'] ?? [];
+    $ids = [];
     if (
         !$name ||
         !preg_match('/^[a-z0-9][a-z0-9._-]{2,79}$/D', $username) ||
@@ -104,6 +112,7 @@ function v2SaveAccount(array $me, array $v): string
     if (!is_array($permissions) || array_diff($permissions, V2_PERMISSIONS)) {
         fail('Permissões inválidas.');
     }
+    $permissions = v2Permissions($permissions);
     if (
         $classes !== null &&
         (!is_array($classes) ||
@@ -219,7 +228,7 @@ function v2CheckAction(array $me, string $action, array $b, array $v): void
     }
     $permission = match ($action) {
         'election', 'candidate', 'duplicate', 'deleteElection', 'image' => 'manageElections',
-        'enroll', 'electors', 'unlock' => 'manageVoters',
+        'enroll', 'electors', 'roster', 'unlock' => 'manageVoters',
         'publish', 'close' => 'publishElections',
         default => '',
     };

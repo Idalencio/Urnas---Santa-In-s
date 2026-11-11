@@ -5,7 +5,7 @@ namespace Urna;
 /** Aplica somente migrações pendentes; mantém as tabelas e os votos anteriores. */
 function v2Schema(): void
 {
-    if (one("SELECT version FROM schema_migrations WHERE version='007_data_protection.sql'")) {
+    if (one("SELECT version FROM schema_migrations WHERE version='008_election_lifecycle.sql'")) {
         return;
     }
     installSchema();
@@ -13,7 +13,7 @@ function v2Schema(): void
 function v2Election(string $id, bool $lock = false): array
 {
     $e = one(
-        'SELECT id,name,digits,has_vice AS hasVice,require_matricula AS requireMatricula,published,closed,starts_at AS startsAt,ends_at AS endsAt,candidate_snapshot AS candidateSnapshot FROM v2_elections WHERE id=?' .
+        'SELECT id,name,digits,has_vice AS hasVice,require_matricula AS requireMatricula,published,closed,starts_at AS startsAt,ends_at AS endsAt,candidate_snapshot AS candidateSnapshot,public_token AS publicToken,deleted_at AS deletedAt,deleted_by AS deletedBy FROM v2_elections WHERE id=?' .
             ($lock ? ' FOR UPDATE' : ''),
         [$id],
     );
@@ -34,51 +34,50 @@ function v2Status(array $e): string
     }
     return now() >= $e['endsAt'] ? 'closed' : (now() < $e['startsAt'] ? 'scheduled' : 'active');
 }
-/** Trava a eleição e impede editar configurações que já foram publicadas. */
+/** A mesma trava da votação fecha a edição assim que chega o horário de abertura. */
 function v2Draft(string $id): array
 {
     $e = v2Election($id, true);
-    if ($e['published'] || $e['closed']) {
-        fail('Esta eleição já foi publicada. Duplique-a para fazer outra configuração.', 409);
+    if ($e['deletedAt'] || !in_array(v2Status($e), ['draft', 'scheduled'], true)) {
+        fail('A eleição já abriu e não pode mais ser editada.', 409);
+    }
+    if (
+        one('SELECT id FROM v2_ballots WHERE election_id=? LIMIT 1', [$id]) ||
+        one('SELECT matricula FROM v2_electors WHERE election_id=? AND voted=1 LIMIT 1', [$id])
+    ) {
+        fail('Esta eleição possui votos e não pode ser editada.', 409);
     }
     return $e;
 }
-/** Exclui somente rascunhos, sob a mesma trava usada pela publicação. */
-function v2DeleteElection(string $id): void
+/** Exclusão lógica: apuração, eleitorado e votos continuam no arquivo administrativo. */
+function v2DeleteElection(string $id, array $me): void
 {
-    transaction(function () use ($id) {
+    transaction(function () use ($id, $me) {
         $e = v2Election($id, true);
-        if ($e['published'] || $e['closed']) {
-            fail('Somente eleições em preparação podem ser excluídas.', 409);
+        if (v2Status($e) === 'active') {
+            fail('Encerre a votação antes de excluir a eleição.', 409);
         }
-        // Nunca apagar participação ou votos, mesmo em um cadastro inconsistente.
+        if ($e['deletedAt']) {
+            fail('Esta eleição já foi excluída.', 409);
+        }
         if (
-            one('SELECT id FROM v2_ballots WHERE election_id=? LIMIT 1', [$id]) ||
-            one('SELECT matricula FROM v2_electors WHERE election_id=? AND voted=1 LIMIT 1', [$id])
+            !$e['published'] &&
+            (one('SELECT id FROM v2_ballots WHERE election_id=? LIMIT 1', [$id]) ||
+                one('SELECT matricula FROM v2_electors WHERE election_id=? AND voted=1 LIMIT 1', [
+                    $id,
+                ]))
         ) {
-            fail('Esta eleição possui registros de votação e não pode ser excluída.', 409);
+            fail('Esta eleição possui votos. Confira o cadastro antes de excluir.', 409);
         }
-        sql('DELETE FROM v2_election_terminals WHERE election_id=?', [$id]);
+        sql(
+            'UPDATE v2_elections SET deleted_at=?,deleted_by=?,closed=IF(published=1,1,closed) WHERE id=?',
+            [now(), $me['id'], $id],
+        );
         sql('UPDATE v2_terminals SET election_id=NULL WHERE election_id=?', [$id]);
-        sql('DELETE FROM v2_electors WHERE election_id=?', [$id]);
-        sql('DELETE FROM v2_candidates WHERE election_id=?', [$id]);
-        sql('DELETE FROM v2_election_owners WHERE election_id=?', [$id]);
-        foreach (
-            all('SELECT admin_id,election_ids FROM v2_accounts ORDER BY admin_id FOR UPDATE')
-            as $account
-        ) {
-            $ids = json_decode($account['election_ids'], true, 64, JSON_THROW_ON_ERROR);
-            if (in_array($id, $ids, true)) {
-                sql('UPDATE v2_accounts SET election_ids=? WHERE admin_id=?', [
-                    json_encode(
-                        array_values(array_filter($ids, fn($value) => $value !== $id)),
-                        JSON_THROW_ON_ERROR,
-                    ),
-                    $account['admin_id'],
-                ]);
-            }
-        }
-        sql('DELETE FROM v2_elections WHERE id=?', [$id]);
+        sql(
+            'UPDATE v2_electors SET gate_hash=NULL,gate_expires=NULL,terminal_id=NULL WHERE election_id=?',
+            [$id],
+        );
     });
 }
 function v2Candidates(string $id): array
@@ -125,7 +124,7 @@ function v2TerminalElections(string $terminalId): array
     $out = [];
     foreach (
         all(
-            'SELECT e.id FROM v2_elections e WHERE e.published=1 AND e.closed=0 AND (EXISTS (SELECT 1 FROM v2_election_terminals l WHERE l.election_id=e.id AND l.terminal_id=?) OR EXISTS (SELECT 1 FROM v2_terminals t WHERE t.id=? AND t.election_id=e.id)) ORDER BY e.name',
+            'SELECT e.id FROM v2_elections e WHERE e.deleted_at IS NULL AND e.published=1 AND e.closed=0 AND (EXISTS (SELECT 1 FROM v2_election_terminals l WHERE l.election_id=e.id AND l.terminal_id=?) OR EXISTS (SELECT 1 FROM v2_terminals t WHERE t.id=? AND t.election_id=e.id)) ORDER BY e.name',
             [$terminalId, $terminalId],
         )
         as $r
@@ -158,17 +157,35 @@ function v2ResolveElection(string $terminalId, string $requested): array
     if (!v2Linked($terminalId, $requested)) {
         fail('Esta eleição não está disponível nesta urna.', 409);
     }
-    return v2Election($requested);
+    $e = v2Election($requested);
+    if ($e['deletedAt']) {
+        fail('Esta eleição não está disponível nesta urna.', 409);
+    }
+    return $e;
 }
 /** Apuração somente de leitura: uma transação mantém votos e participação na mesma fotografia. */
-function v2Tally(): never
+function v2Tally(bool $public = false): never
 {
     method('GET');
-    $me = requireAdmin(true);
-    v2Permission($me, 'viewResults');
-    $id = clean($_GET['election'] ?? '');
-    v2ElectionAccess($me, $id);
-    $snapshot = transaction(function () use ($id) {
+    v2Schema();
+    $token = '';
+    if ($public) {
+        $token = clean($_GET['token'] ?? '', 65);
+        if (!preg_match('/^[a-f0-9]{64}$/D', $token)) {
+            fail('Apuração não encontrada.', 404);
+        }
+        $r = one('SELECT id FROM v2_elections WHERE public_token=? AND published=1', [$token]);
+        if (!$r) {
+            fail('Apuração não encontrada.', 404);
+        }
+        $id = $r['id'];
+    } else {
+        $me = requireAdmin(true);
+        v2Permission($me, 'viewResults');
+        $id = clean($_GET['election'] ?? '');
+        v2ElectionAccess($me, $id);
+    }
+    $snapshot = transaction(function () use ($id, $token) {
         $e = v2Election($id);
         if (!$e['published']) {
             fail('A apuração fica disponível depois de publicar a eleição.', 409);
@@ -187,21 +204,24 @@ function v2Tally(): never
             'SELECT COUNT(*) AS eligible,COALESCE(SUM(voted),0) AS voted FROM v2_electors WHERE election_id=?',
             [$id],
         );
-        $candidates = array_map(function ($c) use ($votes) {
+        $photo = fn($path) => $token && str_starts_with($path, '/api/images/')
+            ? $path . '?tally=' . $token
+            : $path;
+        $candidates = array_map(function ($c) use ($votes, $photo) {
             return [
                 'id' => $c['id'],
                 'name' => $c['name'],
                 'code' => $c['code'],
-                'image' => $c['image'] ?? '',
+                'image' => $photo($c['image'] ?? ''),
                 'viceName' => $c['viceName'] ?? '',
-                'viceImage' => $c['viceImage'] ?? '',
+                'viceImage' => $photo($c['viceImage'] ?? ''),
                 'votes' => $votes[$c['id']] ?? 0,
             ];
         }, $e['candidateSnapshot']);
         // Não inclui matrículas, turmas, liberações ou identificação de votantes.
         return [
             'election' => [
-                'id' => $e['id'],
+                'id' => $token ?: $e['id'],
                 'name' => $e['name'],
                 'status' => v2Status($e),
                 'startsAt' => $e['startsAt'],
@@ -224,7 +244,7 @@ function v2Tally(): never
 function v2State(array $me): array
 {
     $elections = [];
-    foreach (all('SELECT id FROM v2_elections ORDER BY name') as $r) {
+    foreach (all('SELECT id FROM v2_elections WHERE deleted_at IS NULL ORDER BY name') as $r) {
         if (!v2HasElection($me, $r['id'])) {
             continue;
         }
@@ -312,6 +332,7 @@ function v2SaveElection(array $v, array $me): string
                     $id,
                 ],
             );
+            v2RefreshScheduled($id);
         } else {
             sql(
                 "INSERT INTO v2_elections (id,name,digits,has_vice,require_matricula,candidate_snapshot) VALUES (?,?,?,?,?,'[]')",
@@ -396,6 +417,7 @@ function v2SaveCandidate(array $v, array $me): void
                 ],
             );
         }
+        v2RefreshScheduled($eid);
     });
 }
 /** Valida o arquivo inteiro antes de iniciar a gravação dos alunos. */
@@ -466,6 +488,16 @@ function v2Enroll(array $b, array $me): void
 {
     $id = clean($b['electionId'] ?? '');
     $classes = $b['classes'] ?? [];
+    $explicit = array_key_exists('matriculas', $b);
+    $selected = $b['matriculas'] ?? [];
+    if (
+        $explicit &&
+        (!is_array($selected) ||
+            count($selected) > 20000 ||
+            array_filter($selected, fn($m) => !is_string($m)))
+    ) {
+        fail('Seleção de alunos inválida.');
+    }
     if (
         !is_array($classes) ||
         count($classes) > 500 ||
@@ -474,7 +506,7 @@ function v2Enroll(array $b, array $me): void
         fail('Selecione as turmas.');
     }
     if ($me['role'] !== 'admin') {
-        if (!$classes) {
+        if (!$classes && !$explicit) {
             fail('Selecione pelo menos uma turma liberada.', 403);
         }
         foreach ($classes as $class) {
@@ -484,23 +516,30 @@ function v2Enroll(array $b, array $me): void
         }
     }
     $classes = array_map(__NAMESPACE__ . '\\v2CanonicalClass', $classes);
-    transaction(function () use ($id, $classes) {
+    transaction(function () use ($id, $classes, $explicit, $selected, $me) {
         v2Draft($id);
-        $students = all('SELECT * FROM v2_students WHERE active=1');
+        $students = $explicit
+            ? v2RosterRows($id, $me)
+            : all('SELECT matricula,name,class_name AS className FROM v2_students WHERE active=1');
         $chosen = array_filter(
             $students,
-            fn($s) => !$classes || in_array($s['class_name'], $classes, true),
+            fn($s) => (!$classes ? !$explicit : in_array($s['className'], $classes, true)) &&
+                (!$explicit || in_array($s['matricula'], $selected, true)),
         );
-        if (!$chosen) {
+        if ($explicit && count(array_unique($selected)) !== count($chosen)) {
+            fail('Há alunos fora das turmas selecionadas ou do seu acesso.', 403);
+        }
+        if (!$chosen && !$explicit) {
             fail('Não há alunos nas turmas escolhidas.');
         }
         sql('DELETE FROM v2_electors WHERE election_id=?', [$id]);
         foreach ($chosen as $s) {
             sql(
                 'INSERT INTO v2_electors (election_id,matricula,name,class_name) VALUES (?,?,?,?)',
-                [$id, $s['matricula'], $s['name'], $s['class_name']],
+                [$id, $s['matricula'], $s['name'], $s['className']],
             );
         }
+        v2RefreshScheduled($id);
     });
 }
 /** Publica candidatos e eleitorado fixos e vincula a eleição às urnas compartilhadas. */
@@ -588,11 +627,12 @@ function v2Publish(array $b): void
             }
         }
         sql(
-            'UPDATE v2_elections SET published=1,starts_at=?,ends_at=?,candidate_snapshot=? WHERE id=?',
+            'UPDATE v2_elections SET published=1,starts_at=?,ends_at=?,candidate_snapshot=?,public_token=COALESCE(public_token,?) WHERE id=?',
             [
                 $start,
                 $end,
                 json_encode($candidates, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                bin2hex(random_bytes(32)),
                 $id,
             ],
         );
@@ -671,7 +711,7 @@ function v2Authorize(string $id, array $b): array
     return transaction(function () use ($id, $initial, $matricula) {
         $e = v2Election($initial['id'], true);
         v2Terminal($id, true);
-        if (!v2Linked($id, $e['id']) || v2Status($e) !== 'active') {
+        if ($e['deletedAt'] || !v2Linked($id, $e['id']) || v2Status($e) !== 'active') {
             fail('A eleição não está aberta.', 409);
         }
         if (!$e['requireMatricula']) {
@@ -747,7 +787,7 @@ function v2Vote(string $id, array $b): array
             fail('Esta confirmação já foi utilizada.', 409);
         }
         v2Terminal($id, true);
-        if (!v2Linked($id, $eid) || v2Status($e) !== 'active') {
+        if ($e['deletedAt'] || !v2Linked($id, $eid) || v2Status($e) !== 'active') {
             fail('A eleição não está aberta nesta urna.', 409);
         }
         if ($e['requireMatricula']) {
@@ -831,6 +871,7 @@ function v2App(): never
     }
     $me = requireAdmin(true);
     v2Schema();
+    v2EnsurePublicTokens();
     sql(
         "INSERT IGNORE INTO v2_terminals (id,name,location,model) VALUES ('urna-padrao','Urna padrão','Teclado e toque','standard'),('urna-infantil','Urna infantil','Escolha por imagens','images')",
     );
@@ -855,7 +896,7 @@ function v2App(): never
             $id = v2SaveElection($v, $me);
             reply(['ok' => true, 'id' => $id]);
         case 'deleteElection':
-            v2DeleteElection(clean($b['electionId'] ?? ''));
+            v2DeleteElection(clean($b['electionId'] ?? ''), $me);
             break;
         case 'candidate':
             v2SaveCandidate($v, $me);
@@ -887,6 +928,8 @@ function v2App(): never
                     array_filter($rows, fn($s) => v2ClassAllowed($me, $s['className'])),
                 ),
             ]);
+        case 'roster':
+            reply(['rows' => v2RosterRows(clean($b['electionId'] ?? ''), $me)]);
         case 'unlock':
             transaction(function () use ($b, $me) {
                 $id = clean($b['electionId'] ?? '');

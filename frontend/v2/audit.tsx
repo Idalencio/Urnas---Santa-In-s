@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { History, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { responseData } from '../app/http';
 import { PageHeading } from './workflow';
+import ElectionArchive, { type ArchivedElection } from './election-archive';
 const ACTIONS: Record<string, string> = {
   login: 'Entrada no painel',
   mfaBegin: 'Configuração de autenticador iniciada',
@@ -28,6 +29,9 @@ const ACTIONS: Record<string, string> = {
   image: 'Imagem adicionada',
 };
 export default function AuditPanel({ elections, accounts }: { elections: any[]; accounts: any[] }) {
+  const [tab, setTab] = useState('activities'),
+    [archive, setArchive] = useState<ArchivedElection[] | null>(null),
+    [archiveError, setArchiveError] = useState('');
   const [filter, setFilter] = useState({ action: '', actor: '', election: '', from: '', to: '' }),
     [offset, setOffset] = useState(0),
     [reload, setReload] = useState(0),
@@ -54,6 +58,23 @@ export default function AuditPanel({ elections, accounts }: { elections: any[]; 
       });
     return () => c.abort();
   }, [filter, offset, reload]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v2/election-history', {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { 'X-Urna-Panel': sessionStorage.getItem('urna_panel_key') || '' },
+    })
+      .then(responseData)
+      .then((data) => {
+        setArchive(data.rows);
+        setArchiveError('');
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setArchiveError(e.message);
+      });
+    return () => controller.abort();
+  }, [reload]);
   const change = (key: string, value: string) => {
     setOffset(0);
     setFilter((f) => ({ ...f, [key]: value }));
@@ -62,8 +83,8 @@ export default function AuditPanel({ elections, accounts }: { elections: any[]; 
     <div className="audit-page">
       <PageHeading
         eyebrow="ADMINISTRAÇÃO"
-        title="Histórico de atividades"
-        description="Acompanhe as alterações e os acessos administrativos da escola."
+        title="Histórico"
+        description="Atividades administrativas e arquivo completo das eleições da escola."
         icon={<History size={26} />}
         action={
           <button
@@ -75,135 +96,162 @@ export default function AuditPanel({ elections, accounts }: { elections: any[]; 
           </button>
         }
       />
-      <section className="panel">
-        <div className="audit-filters">
-          <label>
-            Ação
-            <select value={filter.action} onChange={(e) => change('action', e.target.value)}>
-              <option value="">Todas as ações</option>
-              {Object.entries(ACTIONS)
-                .filter(([id]) => !id.startsWith('mfa'))
-                .map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {label}
+      <nav className="clean-detail-tabs" aria-label="Seções do histórico">
+        {[
+          { id: 'activities', label: 'Atividades' },
+          { id: 'elections', label: 'Todas as eleições' },
+        ].map((item) => (
+          <button
+            key={item.id}
+            className={tab === item.id ? 'active' : ''}
+            aria-current={tab === item.id ? 'page' : undefined}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      {tab === 'elections' ? (
+        archiveError ? (
+          <div className="error-banner" role="alert">
+            {archiveError}
+          </div>
+        ) : archive ? (
+          <ElectionArchive rows={archive} />
+        ) : (
+          <p role="status">Carregando eleições…</p>
+        )
+      ) : (
+        <section className="panel">
+          <div className="audit-filters">
+            <label>
+              Ação
+              <select value={filter.action} onChange={(e) => change('action', e.target.value)}>
+                <option value="">Todas as ações</option>
+                {Object.entries(ACTIONS)
+                  .filter(([id]) => !id.startsWith('mfa'))
+                  .map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              Responsável
+              <select value={filter.actor} onChange={(e) => change('actor', e.target.value)}>
+                <option value="">Todos</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label>
-            Responsável
-            <select value={filter.actor} onChange={(e) => change('actor', e.target.value)}>
-              <option value="">Todos</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Eleição
-            <select value={filter.election} onChange={(e) => change('election', e.target.value)}>
-              <option value="">Todas, incluindo excluídas</option>
-              {elections.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            De (UTC)
-            <input
-              type="date"
-              value={filter.from}
-              onChange={(e) => change('from', e.target.value)}
-            />
-          </label>
-          <label>
-            Até (UTC)
-            <input type="date" value={filter.to} onChange={(e) => change('to', e.target.value)} />
-          </label>
-        </div>
-        <p className="audit-note">
-          O histórico começa com esta atualização. Registros de votação e escolhas dos eleitores não
-          fazem parte dele.
-        </p>
-        {error && (
-          <div role="alert" className="error-banner">
-            {error}
+              </select>
+            </label>
+            <label>
+              Eleição
+              <select value={filter.election} onChange={(e) => change('election', e.target.value)}>
+                <option value="">Todas, incluindo excluídas</option>
+                {(archive || elections).map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              De (UTC)
+              <input
+                type="date"
+                value={filter.from}
+                onChange={(e) => change('from', e.target.value)}
+              />
+            </label>
+            <label>
+              Até (UTC)
+              <input type="date" value={filter.to} onChange={(e) => change('to', e.target.value)} />
+            </label>
           </div>
-        )}
-        {busy ? (
-          <p role="status">Carregando histórico…</p>
-        ) : (
-          !error && (
-            <>
-              {!data?.rows?.length ? (
-                <div className="security-explanation">
-                  <History size={28} />
+          <p className="audit-note">
+            O histórico registra ações administrativas. A escolha de cada eleitor permanece
+            sigilosa.
+          </p>
+          {error && (
+            <div role="alert" className="error-banner">
+              {error}
+            </div>
+          )}
+          {busy ? (
+            <p role="status">Carregando histórico…</p>
+          ) : (
+            !error && (
+              <>
+                {!data?.rows?.length ? (
+                  <div className="security-explanation">
+                    <History size={28} />
+                    <div>
+                      <h3>Nenhuma atividade encontrada</h3>
+                      <p>
+                        As próximas alterações aparecerão aqui. Você também pode ajustar os filtros.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <ol className="audit-list">
+                    {data.rows.map((r: any) => (
+                      <li key={r.id}>
+                        <span className="audit-icon">
+                          <History size={18} />
+                        </span>
+                        <div>
+                          <strong>{ACTIONS[r.action] || r.action}</strong>
+                          <p>
+                            {r.actorName}{' '}
+                            <span>· {new Date(r.occurredAt).toLocaleString('pt-BR')}</span>
+                          </p>
+                          {r.targetId && <small>Registro: {r.targetId}</small>}
+                          {r.details.summary && (
+                            <small>
+                              {Object.entries(r.details.summary)
+                                .map(
+                                  ([k, v]) =>
+                                    `${({ added: 'Novos', updated: 'Atualizados', unchanged: 'Sem alteração', reactivated: 'Reativados' } as any)[k] || k}: ${v}`,
+                                )
+                                .join(' · ')}
+                            </small>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <div className="audit-pagination">
+                  <span>
+                    {data?.total || 0} registros
+                    {data?.total > 0 ? ` · ${offset + 1}–${Math.min(offset + 50, data.total)}` : ''}
+                  </span>
                   <div>
-                    <h3>Nenhuma atividade encontrada</h3>
-                    <p>
-                      As próximas alterações aparecerão aqui. Você também pode ajustar os filtros.
-                    </p>
+                    <button
+                      className="button secondary"
+                      disabled={offset === 0}
+                      onClick={() => setOffset(Math.max(0, offset - 50))}
+                    >
+                      <ChevronLeft size={16} /> Anterior
+                    </button>
+                    <button
+                      className="button secondary"
+                      disabled={!data || offset + 50 >= data.total}
+                      onClick={() => setOffset(offset + 50)}
+                    >
+                      Próxima <ChevronRight size={16} />
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <ol className="audit-list">
-                  {data.rows.map((r: any) => (
-                    <li key={r.id}>
-                      <span className="audit-icon">
-                        <History size={18} />
-                      </span>
-                      <div>
-                        <strong>{ACTIONS[r.action] || r.action}</strong>
-                        <p>
-                          {r.actorName}{' '}
-                          <span>· {new Date(r.occurredAt).toLocaleString('pt-BR')}</span>
-                        </p>
-                        {r.targetId && <small>Registro: {r.targetId}</small>}
-                        {r.details.summary && (
-                          <small>
-                            {Object.entries(r.details.summary)
-                              .map(
-                                ([k, v]) =>
-                                  `${({ added: 'Novos', updated: 'Atualizados', unchanged: 'Sem alteração', reactivated: 'Reativados' } as any)[k] || k}: ${v}`,
-                              )
-                              .join(' · ')}
-                          </small>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              <div className="audit-pagination">
-                <span>
-                  {data?.total || 0} registros
-                  {data?.total > 0 ? ` · ${offset + 1}–${Math.min(offset + 50, data.total)}` : ''}
-                </span>
-                <div>
-                  <button
-                    className="button secondary"
-                    disabled={offset === 0}
-                    onClick={() => setOffset(Math.max(0, offset - 50))}
-                  >
-                    <ChevronLeft size={16} /> Anterior
-                  </button>
-                  <button
-                    className="button secondary"
-                    disabled={!data || offset + 50 >= data.total}
-                    onClick={() => setOffset(offset + 50)}
-                  >
-                    Próxima <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            </>
-          )
-        )}
-      </section>
+              </>
+            )
+          )}
+        </section>
+      )}
     </div>
   );
 }

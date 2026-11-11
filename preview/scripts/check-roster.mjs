@@ -248,8 +248,8 @@ ok(
   'Permissões acompanham nome novo',
 );
 ok(
-  (await team('electors', { electionId: seed.id })).body.rows.length === 2,
-  'Equipe mantém acesso ao eleitorado histórico',
+  (await team('electors', { electionId: seed.id })).status === 403,
+  'Eleitorado de outra pessoa exige acesso administrativo',
 );
 ok(
   JSON.stringify((await app('electors', { electionId: seed.id })).body.rows) ===

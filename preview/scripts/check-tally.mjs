@@ -235,7 +235,7 @@ await need('account', {
 });
 cookie = staffCookie;
 panel = staffPanel;
-ok((await get(eid)).status === 200, 'Permissão libera eleição atribuída');
+ok((await get(eid)).status === 403, 'Permissão não revela eleição de outra pessoa');
 ok((await get(second)).status === 403, 'Permissão não libera eleição alheia');
 cookie = adminCookie;
 panel = adminPanel;

@@ -29,17 +29,19 @@ def team_remove(target):return t.post(BASE+'/api/v2/app',json={'action':'deleteE
 check('Sem permissão não exclui rascunho atribuído',team_remove(eid).status_code==403)
 value.update(password='',permissions=['manageElections']);assert app('account',value=value).ok
 foreign=create();check('Permissão não libera eleição alheia',team_remove(foreign).status_code==403)
-before=app().json();check('Equipe autorizada exclui rascunho atribuído',team_remove(eid).ok)
+check('Atribuição antiga não concede acesso',team_remove(eid).status_code==403)
+r=t.post(BASE+'/api/v2/app',json={'action':'election','value':{'name':'Rascunho próprio','digits':3,'requireMatricula':1}},headers=th);assert r.ok,r.text;eid=r.json()['id']
+before=app().json();check('Equipe exclui o próprio rascunho',team_remove(eid).ok)
 after=app().json()
 check('Rascunho sai do painel',not any(e['id']==eid for e in after['elections']))
 check('Cadastro geral preservado',before['students']==after['students'])
 check('Urnas preservadas',before['terminals']==after['terminals'])
 check('Outras eleições preservadas',[e for e in before['elections'] if e['id']!=eid]==after['elections'])
 check('Atribuição removida',eid not in next(a for a in after['accounts'] if a['id']==value['id'])['electionIds'])
-check('Exclusão repetida recusada',remove(eid).status_code==404)
+check('Exclusão repetida recusada',remove(eid).status_code==409)
 check('Eleição desconhecida recusada',remove('inexistente').status_code==404)
 closed=create();assert app('close',electionId=closed).ok
-check('Encerrada não pode ser excluída',remove(closed).status_code==409)
+check('Encerrada pode ser excluída das listas',remove(closed).ok)
 # A mesma trava de eleição precisa serializar publicação e exclusão.
 race=create()
 period={'electionId':race,'models':['standard'],'startsAt':(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(seconds=5)).isoformat(timespec='milliseconds'),'endsAt':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat(timespec='milliseconds')}

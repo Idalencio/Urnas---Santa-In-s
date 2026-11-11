@@ -28,7 +28,7 @@ function auditWrite(
 }
 function auditPrepare(array $me, string $action, array $b, array $v): void
 {
-    if (in_array($action, ['electors', 'csvPreview'], true)) {
+    if (in_array($action, ['electors', 'roster', 'csvPreview'], true)) {
         return;
     }
     $baseAction = str_starts_with($action, 'legacy.') ? substr($action, 7) : $action;

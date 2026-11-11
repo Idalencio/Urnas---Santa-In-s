@@ -21,10 +21,12 @@ import { Login, AccountSettings } from '../app/access';
 import { Field, Modal, Badge, Empty, csvDownload, formatted, localInput } from '../app/components';
 import { Shell, UrnaPreview, PageHeading } from './workflow';
 import { ElectionList, UrnasPanel } from './management';
-import { ClassPicker, ClassesPanel, type SchoolClass, type Student } from './people';
+import { ClassesPanel, type SchoolClass, type Student } from './people';
+import ElectorSelection from './electors';
+import Home from './home';
 import { TeamPanel, allowed, type TeamAccount } from './access';
 import Ballot from './ballot';
-import TallyPanel from './tally';
+import TallyPanel, { TallyShare } from './tally';
 import AuditPanel from './audit';
 import { exampleCandidates, previewElection } from './demo';
 import { responseData } from '../app/http';
@@ -79,16 +81,15 @@ function DeleteElectionDialog({
 }) {
   const [error, setError] = useState('');
   return (
-    <Modal title="Excluir eleição em preparação" onClose={() => !busy && close()}>
+    <Modal title="Excluir eleição" onClose={() => !busy && close()}>
       <div className="editor-form delete-election-dialog">
         <p>
           Excluir <strong>{election.name}</strong>?
         </p>
         <p className="simple-hint">
-          Os candidatos e a lista de eleitores desta eleição serão removidos. O cadastro geral de
-          alunos e as outras eleições serão mantidos.
+          A eleição sairá das listas de eleições e apuração. Os registros e resultados permanecerão
+          no histórico, disponível somente para administradores.
         </p>
-        <p className="delete-warning">Esta ação não pode ser desfeita.</p>
         {error && (
           <div className="error-banner" role="alert">
             {error}
@@ -615,15 +616,13 @@ export default function App() {
     [notice, setNotice] = useState('');
   const [publishedTab, setPublishedTab] = useState('voting');
   const [tallyId, setTallyId] = useState('');
-  const [view, setView] = useState('elections'),
+  const [view, setView] = useState('home'),
     [selected, setSelected] = useState(''),
     [creating, setCreating] = useState(false),
     [step, setStep] = useState(0),
     [modal, setModal] = useState<any>(null),
     [query, setQuery] = useState('');
   const [models, setModels] = useState<Model[]>(['standard']),
-    [audience, setAudience] = useState('classes'),
-    [classes, setClasses] = useState<string[]>([]),
     [electors, setElectors] = useState<Student[] | null>(null),
     [printRows, setPrintRows] = useState<Student[]>([]);
   const [end, setEnd] = useState(localInput(new Date(Date.now() + 3 * 3600000))),
@@ -631,7 +630,9 @@ export default function App() {
     [scheduled, setScheduled] = useState(false),
     [previewModel, setPreviewModel] = useState<Model | null>(null),
     [testVotes, setTestVotes] = useState(0),
-    [exampleBusy, setExampleBusy] = useState(false);
+    [exampleBusy, setExampleBusy] = useState(false),
+    [editingSchedule, setEditingSchedule] = useState(false),
+    [clock, setClock] = useState(Date.now());
   const canEdit = allowed(data?.me, 'manageElections'),
     canVoters = allowed(data?.me, 'manageVoters'),
     canPublish = allowed(data?.me, 'publishElections'),
@@ -639,7 +640,19 @@ export default function App() {
     isAdmin = data?.me.role === 'admin';
   const busyRef = useRef(false);
   const e = data?.elections.find((e) => e.id === selected),
-    draft = e && !e.published && !e.closed;
+    draft = e && (status(e) === 'draft' || (status(e) === 'scheduled' && editingSchedule));
+  useEffect(() => {
+    if (!e?.published) return;
+    const transition = [Date.parse(e.startsAt), Date.parse(e.endsAt)]
+      .filter((t) => t > Date.now())
+      .sort((a, b) => a - b)[0];
+    if (!transition) return;
+    const timer = setTimeout(
+      () => setClock(Date.now()),
+      Math.min(2147483647, transition - Date.now() + 30),
+    );
+    return () => clearTimeout(timer);
+  }, [e?.id, e?.startsAt, e?.endsAt, e?.published, clock]);
   async function load() {
     const r = await fetch('/api/v2/app', {
       cache: 'no-store',
@@ -687,7 +700,7 @@ export default function App() {
           body: JSON.stringify({ action: name, ...payload }),
         }),
       );
-      if (!['electors', 'csvPreview', 'image'].includes(name)) await load();
+      if (!['electors', 'roster', 'csvPreview', 'image'].includes(name)) await load();
       return result;
     } finally {
       busyRef.current = false;
@@ -700,7 +713,8 @@ export default function App() {
   }
   function go(next: string) {
     setPreviewModel(null);
-    setView(next === 'home' ? 'elections' : next);
+    setView(next);
+    setEditingSchedule(false);
     setSelected('');
     setCreating(false);
     setModal(null);
@@ -715,6 +729,7 @@ export default function App() {
   }
   function choose(item: DetailedElection) {
     setPublishedTab('voting');
+    setEditingSchedule(false);
     setView('elections');
     setSelected(item.id);
     setCreating(false);
@@ -726,8 +741,6 @@ export default function App() {
           : 3
         : 1,
     );
-    setAudience(item.electorCount ? 'keep' : 'classes');
-    setClasses(item.electorClasses || []);
     setElectors(null);
     const current = [
       ...new Set(
@@ -737,8 +750,9 @@ export default function App() {
       ),
     ] as Model[];
     setModels(current.length ? current : ['standard']);
-    setEnd(localInput(new Date(Date.now() + 3 * 3600000)));
-    setScheduled(false);
+    setEnd(localInput(new Date(item.endsAt || Date.now() + 3 * 3600000)));
+    setStart(localInput(new Date(item.startsAt || Date.now())));
+    setScheduled(status(item) === 'scheduled');
     clean();
   }
   function next(n: number) {
@@ -770,25 +784,11 @@ export default function App() {
     const r = await action('election', { value });
     setSelected(r.id);
     setCreating(false);
-    setAudience(value.id && e?.electorCount ? 'keep' : 'classes');
-    setClasses(e?.electorClasses || []);
     next(1);
   }
   async function saveCandidate(value: any) {
     await action('candidate', { value });
     setModal(null);
-  }
-  async function votersNext() {
-    if (!e) return;
-    await attempt(async () => {
-      if (e.requireMatricula && canVoters) {
-        if (audience === 'classes' && !classes.length)
-          throw Error('Selecione pelo menos uma turma.');
-        if (audience !== 'keep') await action('enroll', { electionId: e.id, classes });
-        else if (!e.electorCount) throw Error('Selecione os eleitores.');
-      }
-      next(3);
-    });
   }
   async function publish() {
     if (!e) return;
@@ -807,6 +807,7 @@ export default function App() {
         endsAt: endsAt.toISOString(),
       });
       setPublishedTab('voting');
+      setEditingSchedule(false);
       setNotice(scheduled ? 'Eleição agendada.' : 'Eleição publicada. Abra a urna abaixo.');
     });
   }
@@ -840,8 +841,6 @@ export default function App() {
       for (const c of exampleCandidates)
         await action('candidate', { value: { ...c, id: undefined, electionId: r.id } });
       setSelected(r.id);
-      setAudience('classes');
-      setClasses([]);
       setModels(['standard']);
       setStep(2);
     });
@@ -950,6 +949,20 @@ export default function App() {
             <Login onReady={load} />
           ) : (
             <>
+              {view === 'home' && (
+                <Home
+                  me={data.me}
+                  elections={data.elections}
+                  classCount={data.classes.length}
+                  canCreate={canEdit}
+                  create={create}
+                  choose={(item) => {
+                    const found = data.elections.find((x) => x.id === item.id);
+                    if (found) choose(found);
+                  }}
+                  go={go}
+                />
+              )}
               {view === 'elections' && !e && !creating && (
                 <>
                   {error && (
@@ -986,7 +999,19 @@ export default function App() {
               )}
 
               {view === 'tally' && canResults && (
-                <TallyPanel elections={data.elections} selectedId={tallyId} select={setTallyId} />
+                <TallyPanel
+                  elections={data.elections}
+                  selectedId={tallyId}
+                  select={setTallyId}
+                  remove={
+                    canEdit
+                      ? (item) => {
+                          const found = data.elections.find((x) => x.id === item.id);
+                          if (found) setModal({ kind: 'deleteElection', election: found });
+                        }
+                      : undefined
+                  }
+                />
               )}
 
               {view === 'elections' && (creating || draft) && (
@@ -997,7 +1022,7 @@ export default function App() {
                   </button>
                   <div className="simple-wizard-heading">
                     <h1>{creating ? 'Nova eleição' : e?.name}</h1>
-                    <Badge tone="blue">Em preparação</Badge>
+                    <Badge tone="blue">{e?.published ? 'Agendada' : 'Em preparação'}</Badge>
                     {draft && canEdit && (
                       <button
                         className="text-button draft-delete"
@@ -1108,87 +1133,36 @@ export default function App() {
                         </div>
                       </>
                     )}
-                    {step === 2 && e && (
-                      <>
-                        {!e.requireMatricula ? (
-                          <div className="info-banner">
-                            Esta eleição permite votos sem matrícula.
+                    {step === 2 &&
+                      e &&
+                      (e.requireMatricula && canVoters ? (
+                        <ElectorSelection
+                          key={e.id}
+                          electionId={e.id}
+                          busy={busy}
+                          action={action}
+                          back={() => next(1)}
+                          done={() => next(3)}
+                        />
+                      ) : (
+                        <>
+                          <p className="info-banner">
+                            {e.requireMatricula
+                              ? `${e.electorCount || 0} eleitores selecionados.`
+                              : 'Esta eleição permite votos sem matrícula.'}
+                          </p>
+                          <div className="simple-footer">
+                            <button className="button secondary" onClick={() => next(1)}>
+                              <ArrowLeft size={17} />
+                              Voltar
+                            </button>
+                            <button className="button primary" onClick={() => next(3)}>
+                              Continuar
+                              <ArrowRight size={17} />
+                            </button>
                           </div>
-                        ) : (
-                          <>
-                            <p className="simple-hint">
-                              Selecione as turmas que participarão. A lista geral é mantida pelo
-                              administrador.
-                            </p>
-                            {canVoters ? (
-                              <>
-                                <ClassPicker
-                                  options={data.classes}
-                                  value={classes}
-                                  disabled={busy}
-                                  onChange={(value) => {
-                                    setClasses(value);
-                                    setAudience('classes');
-                                  }}
-                                />
-                                {!!e.electorCount && (
-                                  <div className="roster-refresh">
-                                    <p className="simple-hint">
-                                      Lista salva: {e.electorCount} eleitores. Adicionou alunos às
-                                      turmas?
-                                    </p>
-                                    <button
-                                      className="text-button"
-                                      disabled={busy || !classes.length}
-                                      onClick={() =>
-                                        attempt(async () => {
-                                          await action('enroll', { electionId: e.id, classes });
-                                          setAudience('keep');
-                                          setNotice('Alunos das turmas atualizados nesta eleição.');
-                                        })
-                                      }
-                                    >
-                                      Atualizar alunos das turmas
-                                    </button>
-                                  </div>
-                                )}
-                                {isAdmin && (
-                                  <button className="text-button" onClick={() => go('students')}>
-                                    <Upload size={15} />
-                                    Importar ou atualizar lista da escola
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <p className="info-banner">
-                                {e.electorCount || 0} eleitores selecionados. O administrador não
-                                liberou a alteração de turmas para esta conta.
-                              </p>
-                            )}
-                          </>
-                        )}
-                        <div className="simple-footer">
-                          <button className="button secondary" onClick={() => next(1)}>
-                            <ArrowLeft size={17} />
-                            Voltar
-                          </button>
-                          <button
-                            className="button primary"
-                            disabled={
-                              busy ||
-                              (!!e.requireMatricula &&
-                                canVoters &&
-                                audience !== 'keep' &&
-                                !classes.length)
-                            }
-                            onClick={votersNext}
-                          >
-                            {busy ? 'Salvando…' : 'Continuar'}
-                            <ArrowRight size={17} />
-                          </button>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      ))}
 
                     {step === 3 && e && (
                       <>
@@ -1312,8 +1286,10 @@ export default function App() {
                             {busy
                               ? 'Publicando…'
                               : scheduled
-                                ? 'Agendar eleição'
-                                : 'Publicar agora'}
+                                ? e.published
+                                  ? 'Salvar agendamento'
+                                  : 'Agendar eleição'
+                                : 'Abrir votação agora'}
                             <Check size={17} />
                           </button>
                         </div>
@@ -1337,7 +1313,7 @@ export default function App() {
                   )}
                 </>
               )}
-              {view === 'elections' && e && e.published > 0 && (
+              {view === 'elections' && e && e.published > 0 && !draft && (
                 <>
                   <button className="text-button simple-back" onClick={() => go('elections')}>
                     <ArrowLeft size={17} />
@@ -1357,6 +1333,18 @@ export default function App() {
                             : 'A votação foi encerrada.'}
                       </p>
                     </div>
+                    {canEdit && status(e) === 'scheduled' && (
+                      <button
+                        className="button primary"
+                        onClick={() => {
+                          setEditingSchedule(true);
+                          setStep(0);
+                        }}
+                      >
+                        <Pencil size={16} />
+                        Editar eleição agendada
+                      </button>
+                    )}
                     {(canEdit || canPublish) && (
                       <details className="clean-actions-menu">
                         <summary>Ações</summary>
@@ -1370,8 +1358,6 @@ export default function App() {
                                   const r = await action('duplicate', { electionId: e.id });
                                   setSelected(r.id);
                                   setStep(0);
-                                  setAudience('classes');
-                                  setClasses([]);
                                   setModels(['standard']);
                                   clean();
                                 })
@@ -1379,6 +1365,15 @@ export default function App() {
                             >
                               <Copy size={16} />
                               Duplicar eleição
+                            </button>
+                          )}
+                          {canEdit && status(e) === 'closed' && (
+                            <button
+                              className="button secondary clean-danger"
+                              onClick={() => setModal({ kind: 'deleteElection', election: e })}
+                            >
+                              <Trash2 size={16} />
+                              Excluir eleição
                             </button>
                           )}
                           {canPublish && status(e) !== 'closed' && (
@@ -1431,6 +1426,12 @@ export default function App() {
                         </p>
                       </div>
                       {status(e) !== 'closed' && urnLinks(linked)}
+                      {e.publicToken && <TallyShare token={e.publicToken} />}
+                      {status(e) === 'active' && (
+                        <p className="simple-hint">
+                          A configuração está bloqueada porque a votação já abriu.
+                        </p>
+                      )}
                       <div className="clean-election-facts">
                         <div>
                           <span>Participações</span>
@@ -1581,7 +1582,7 @@ export default function App() {
                 </>
               )}
 
-              {view === 'students' && (
+              {view === 'students' && isAdmin && (
                 <ClassesPanel
                   classes={data.classes}
                   students={data.students}
@@ -1610,7 +1611,6 @@ export default function App() {
                   accounts={data.accounts}
                   me={data.me}
                   classes={data.classes}
-                  elections={data.elections}
                   busy={busy}
                   save={async (value) => {
                     await action('account', { value });
@@ -1658,11 +1658,11 @@ export default function App() {
             remove={async () => {
               await action('deleteElection', { electionId: modal.election.id });
               go('elections');
-              setNotice('Eleição em preparação excluída.');
+              setNotice('Eleição excluída das listas. Registro preservado no histórico.');
             }}
           />
         )}
-        {modal?.kind === 'candidate' && e && (
+        {modal?.kind === 'candidate' && e && draft && (
           <Modal
             title={e.hasVice ? 'Candidato e vice' : 'Candidato'}
             wide
@@ -1706,12 +1706,12 @@ export default function App() {
           </Modal>
         )}
         {modal?.kind === 'copy' && (
-          <Modal title="Link da urna" onClose={() => setModal(null)}>
+          <Modal title="Compartilhar link" onClose={() => setModal(null)}>
             <div className="editor-form">
               <Field label="Copie este endereço">
                 <input readOnly value={modal.url} onFocus={(ev) => ev.currentTarget.select()} />
               </Field>
-              <p className="simple-hint">Abra este link no aparelho que será usado para votar.</p>
+              <p className="simple-hint">Copie o endereço completo para compartilhar.</p>
             </div>
           </Modal>
         )}

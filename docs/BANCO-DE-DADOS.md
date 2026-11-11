@@ -1,6 +1,6 @@
 # Urna Santa Inês — especificação do banco e da comunicação
 
-Verificação em 30/10/2026. Base: pacote Urna-Santa-Ines-V2-Alfa.zip, versão 9, e código do ambiente de testes publicado, versão 10, commit `c235e68e5f3504f7f77c6671a7e42a0396bc90c5`.
+Referência inicial em 30/10/2026, atualizada em 11/11/2026 para o fluxo descrito abaixo. Base: pacote Urna-Santa-Ines-V2-Alfa.zip, versão 9, e código do ambiente de testes publicado, versão 10, commit `c235e68e5f3504f7f77c6671a7e42a0396bc90c5`.
 
 Esta é a descrição da implementação atual. O servidor CloudPanel da escola não foi inspecionado nem alterado nesta consulta. Nome do banco, usuário e host reais dependem da configuração desse servidor.
 
@@ -75,7 +75,7 @@ O painel consulta o estado a cada 20 segundos, quando não há operação em and
 
 `v2_students` é o cadastro geral. Cada matrícula tem nome, turma e situação. As turmas são calculadas com `GROUP BY class_name` sobre os alunos ativos. Hoje não existe uma tabela de turmas com `turma_id`.
 
-Ao selecionar as turmas na eleição, a aplicação copia matrícula, nome e turma para `v2_electors`. Essa é a lista própria da eleição. Alterar o cadastro geral não reescreve automaticamente listas já salvas. Nos rascunhos, Atualizar alunos das turmas refaz a seleção; a operação exige que haja alunos ativos na seleção. A lista publicada fica protegida contra edição.
+Ao selecionar as turmas na eleição, a aplicação copia matrícula, nome e turma para `v2_electors`. Essa é a lista própria da eleição. Alterar o cadastro geral não reescreve automaticamente listas já salvas. Na preparação e no agendamento, a seleção pode incluir turmas inteiras ou matrículas específicas. Desmarcar um aluno o retira somente do eleitorado da eleição. A seleção explícita vazia é aceita na preparação; uma eleição agendada com matrícula obrigatória deve manter pelo menos um eleitor. Depois da abertura, o eleitorado fica bloqueado.
 
 A chave composta `(election_id, matricula)` permite que a matrícula `001234` apareça uma vez na eleição A e uma vez na eleição B. O vínculo para `v2_students.matricula` é uma FK real.
 
@@ -89,7 +89,7 @@ A FK `v2_candidates.election_id` aponta para `v2_elections.id`. O índice único
 
 O vice está na mesma linha do candidato, nos campos `vice_name` e `vice_image`; não possui ID ou tabela próprios. A coluna `has_vice` da eleição determina se o cadastro exige vice. A aplicação permite seis chapas ou mais; o banco não fixa um limite de seis.
 
-Publicar valida período, candidatos, eleitores quando a matrícula é exigida, modelos de urna e fotos necessárias. A publicação grava uma cópia dos candidatos em `candidate_snapshot`. A tela de votação e a validação do código usam essa cópia. Nome, regras, candidaturas e eleitorado publicados ficam protegidos no fluxo normal; uma nova configuração é preparada duplicando a eleição.
+Publicar valida período, candidatos, eleitores quando a matrícula é exigida, modelos de urna e fotos necessárias. A publicação grava uma cópia dos candidatos em `candidate_snapshot`. A tela de votação e a validação do código usam essa cópia. Nome, regras, candidaturas, eleitorado, horários e modelos podem ser alterados enquanto a eleição está agendada. A transação atualiza a fotografia e valida que ela continua pronta para abrir. A partir da abertura, esses dados ficam bloqueados; outra configuração pode ser preparada por duplicação.
 
 O status é calculado a partir de `published`, `closed`, `starts_at` e `ends_at`: rascunho, agendada, aberta ou encerrada. Não existe coluna `status` na tabela.
 
@@ -134,7 +134,7 @@ A identidade fica em `administrators`, o hash da senha em `admin_passwords` e os
 | `publishElections` | Publicar, agendar e encerrar                                                  |
 | `viewResults`      | Consultar/exportar resultados                                                 |
 
-`role='admin'` libera as funções administrativas. A equipe recebe as permissões marcadas e acessa eleições próprias ou atribuídas. `class_scope` contém JSON `null` para todas as turmas ou uma lista de nomes permitidos. `election_ids` guarda em JSON as eleições adicionais atribuídas. Esses elementos JSON são validados pelo código; não são FKs individuais.
+`role='admin'` libera as funções administrativas. A equipe acessa somente eleições criadas pela própria conta. A permissão de organizar eleições reúne todas as etapas dependentes, sem liberar administração. `class_scope` contém JSON `null` para todas as turmas ou uma lista de nomes permitidos. `election_ids` permanece no esquema por compatibilidade, mas não concede acesso; atribuições antigas são ignoradas. Esses elementos JSON são validados pelo código; não são FKs individuais.
 
 Importar, cadastrar, editar, renomear turma, excluir aluno e gerenciar contas exigem administrador. As permissões são verificadas no servidor, mesmo em chamadas diretas à API. Alterações de escopo valem nas solicitações seguintes.
 
@@ -222,13 +222,13 @@ Importar uma matrícula existente atualiza nome/turma e ativa o cadastro. Ausên
 
 O POST da API V2 PHP aceita até 2.200.000 bytes de corpo JSON. Como o painel envia fotos em base64, esse limite pode recusar fotos abaixo dos 2 MiB permitidos pela rotina de arquivo; o máximo efetivo por esse caminho fica próximo de 1,65 milhão de bytes, descontando o envelope JSON. A rota multipart tem limite de arquivo de 2 MiB. O adaptador hospedado aceita corpo de até 2.850.000 bytes. Esta diferença já existe no código atual e não foi alterada nesta documentação.
 
-Não há trilha completa de auditoria de edição/exclusão de alunos, nem datas de criação/alteração nas tabelas V2 de cadastro. A coluna `active` preserva o cadastro excluído; isso não é uma lixeira com histórico de versões. Não foi definido um limite de capacidade por teste de carga nesta consulta.
+O histórico administrativo registra alterações de alunos, importações, eleições e acessos. As tabelas V2 de cadastro não têm datas individuais de criação/alteração. A coluna `active` preserva o cadastro excluído; isso não é uma lixeira com histórico de versões. Não foi definido um limite de capacidade por teste de carga nesta consulta.
 
-O pacote não exige Node.js no CloudPanel para executar a aplicação, pois a interface já vai compilada. O código PHP verifica `pdo_mysql`, `mbstring`, `openssl` e `fileinfo`; requer escrita em `storage` e `storage/uploads`. O conjunto foi testado em PHP 8.3/MariaDB 10.11, com 184 verificações HTTP; o adaptador hospedado teve 157 verificações. Isso valida os cenários funcionais testados, sem constituir medição de capacidade.
+O pacote não exige Node.js no CloudPanel para executar a aplicação, pois a interface já vai compilada. O código PHP verifica `pdo_mysql`, `mbstring`, `openssl` e `fileinfo`; requer escrita em `storage` e `storage/uploads`. O fluxo atual foi testado em PHP 8.4/MariaDB 11.8, com 341 verificações HTTP; o adaptador D1 teve 334 verificações. A compatibilidade de sintaxe e as dependências mínimas de PHP 8.3 são mantidas. Isso valida os cenários funcionais testados, sem constituir medição de capacidade.
 
 ## 9. Migrações e tabelas preservadas
 
-As cinco migrações SQL são registradas em `schema_migrations` e executadas uma vez pela aplicação, sob bloqueio de instalação. O banco deve existir e o usuário da aplicação precisa das permissões necessárias para criar as tabelas e ler/gravar dados.
+As oito migrações SQL são registradas em `schema_migrations` e executadas uma vez pela aplicação, sob bloqueio de instalação. O banco deve existir e o usuário da aplicação precisa das permissões necessárias para criar as tabelas e ler/gravar dados.
 
 - `001_initial.sql`: estrutura anterior e autenticação compartilhada.
 - `002_elections_v2.sql`: eleições, candidatos, alunos, urnas, eleitores e votos V2.
@@ -844,14 +844,16 @@ ALTER TABLE `demo_sessions` ADD `account_id` text;
 
 Esta documentação descreve o que foi implementado, incluindo os campos mantidos por compatibilidade. Não altera esquema, dados, permissões ou publicação.
 
-## Exclusão de eleições em preparação
+## Exclusão lógica e arquivo de eleições
 
 A ação `deleteElection` de `POST /api/v2/app` exige `manageElections` e acesso à eleição.
-Aceita `electionId` e recusa eleições publicadas, encerradas ou com voto/participação registrada.
-No MySQL, a transação trava a eleição antes de remover candidatos, eleitores daquele rascunho,
-associações às urnas e proprietário. Remove também atribuições em `v2_accounts.election_ids`.
-O cadastro geral de alunos e as urnas permanecem. No D1, a mesma operação é atômica pela
-revisão do estado. Fotos compartilhadas não são apagadas. Não há alteração de esquema.
+Aceita `electionId` e recusa a exclusão enquanto a votação está aberta. Na preparação, no agendamento ou depois do encerramento, faz exclusão lógica: preenche `deleted_at` e `deleted_by`, encerra agendamentos publicados, cancela liberações e remove a eleição das listas de trabalho. Candidatos, vínculos, proprietário, eleitorado e votos permanecem no banco. O administrador consulta todos os registros em Histórico → Todas as eleições. Exclusões físicas feitas por versões anteriores não são recuperadas automaticamente.
+
+A migração `008_election_lifecycle.sql` acrescenta `public_token CHAR(64) NULL UNIQUE`, `deleted_at VARCHAR(24) NULL` e `deleted_by VARCHAR(160) NULL` a `v2_elections`. O link é criado com 32 bytes aleatórios e preservado em reagendamentos. Duplicar uma eleição cria outro link após a publicação. A exclusão de uma eleição publicada mantém seu resultado final acessível pelo link já compartilhado.
+
+`GET /api/v2/public-tally?token=<token>` retorna somente nomes/fotos de candidatos e vice, situação e totais agregados. Não retorna matrículas, nomes de alunos eleitores, turmas, liberações ou credenciais. O link autoriza apenas a eleição correspondente, incluindo suas fotos; a API administrativa continua exigindo sessão e chave do painel.
+
+`POST /api/v2/app` com `action=roster` lista os alunos das turmas permitidas para a própria eleição. `action=enroll` aceita `classes` e `matriculas` explícitas; valida a interseção e recusa matrículas fora do escopo. A PK `(election_id,matricula)` continua impedindo duplicações.
 
 ## Importação comparada por matrícula
 

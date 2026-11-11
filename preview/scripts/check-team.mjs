@@ -229,11 +229,14 @@ const period = {
   startsAt: new Date(Date.now() - 5000).toISOString(),
   endsAt: new Date(Date.now() + 3600000).toISOString(),
 };
-ok((await team('publish', period)).status === 403, 'Publicar sem permissão recusado');
+ok((await team('publish', period)).status === 200, 'Permissão de organizar inclui publicação');
 value.permissions.push('publishElections');
 assert.equal((await app('account', { value })).status, 200);
-ok((await team('publish', period)).status === 200, 'Admin libera publicação');
-ok((await team()).body.elections[0].results.length === 0, 'Resultados escondidos');
+ok((await team('publish', period)).status === 409, 'Votação aberta impede republicação');
+ok(
+  (await team()).body.elections[0].results.length === 1,
+  'Organizador pode consultar os resultados',
+);
 value.permissions.push('viewResults');
 await app('account', { value });
 ok((await team()).body.elections[0].results.length === 1, 'Resultados liberados separadamente');
@@ -248,11 +251,11 @@ value.permissions = ['manageVoters'];
 value.electionIds = [foreign.id];
 await app('account', { value });
 ok(
-  (await team()).body.elections.some((e) => e.id === foreign.id),
-  'Admin atribui eleição existente',
+  !(await team()).body.elections.some((e) => e.id === foreign.id),
+  'Atribuições antigas não revelam eleições de outra pessoa',
 );
 ok(
-  (await team('electors', { electionId: foreign.id })).body.rows.length === 0,
+  (await team('electors', { electionId: foreign.id })).status === 403,
   'Não expõe eleitores de outras turmas',
 );
 value.classes = null;

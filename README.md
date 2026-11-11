@@ -76,7 +76,7 @@ existente. A senha do MySQL é configurada separadamente em `config/config.php`.
 ## Histórico e atualizações
 
 As alterações feitas neste projeto devem ser validadas, registradas em commit e
-enviadas ao repositório `Idalencio/Urnas---Santa-In-s`, preservando o histórico.
+enviadas ao repositório `Idalencio/Urnas-Santa-Ines`, preservando o histórico.
 O fluxo está documentado em [MANUTENCAO.md](docs/MANUTENCAO.md) e `AGENTS.md`.
 O envio ao GitHub não publica automaticamente no CloudPanel.
 

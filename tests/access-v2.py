@@ -27,7 +27,7 @@ check('Criar eleição sem permissão bloqueado',t('election',value={'name':'Neg
 check('Importação só por administradores',t('csvImport',csv=csv).status_code==403 and t('csvPreview',csv=csv).status_code==403)
 check('Equipe não pode criar contas ou elevar permissões',t('account',value=value).status_code==403)
 value['permissions']=['manageElections','manageVoters'];assert a('account',value=value).ok
-check('Permissões atualizam sessão existente',set(t().json()['me']['permissions'])==set(value['permissions']))
+check('Permissões atualizam sessão existente',set(t().json()['me']['permissions'])=={'manageElections','manageVoters','publishElections','viewResults'})
 r=t('election',value={'name':'Eleição da equipe','digits':5,'hasVice':1,'requireMatricula':1});check('Equipe cria sua própria eleição',r.ok);eid=r.json()['id']
 check('Equipe vê apenas sua eleição',len(t().json()['elections'])==1 and t().json()['elections'][0]['id']==eid)
 foreign=next(e for e in a().json()['elections'] if e['id']!=eid)
@@ -40,18 +40,18 @@ check('Escolha de turma persistida',t().json()['elections'][0]['electorClasses']
 candidate={'electionId':eid,'name':'Leão de teste','code':'1','image':'/characters/lion.svg','viceName':'Coruja de teste','viceImage':'/characters/owl.svg','active':1}
 check('Edição de candidatos permitida',t('candidate',value=candidate).ok)
 period={'electionId':eid,'models':['standard','images'],'startsAt':(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(seconds=5)).isoformat(timespec='milliseconds'),'endsAt':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat(timespec='milliseconds')}
-check('Publicar sem permissão bloqueado',t('publish',**period).status_code==403)
+check('Organizar eleição inclui publicação',t('publish',**period).ok)
 value['permissions'].append('publishElections');assert a('account',value=value).ok
-check('Publicação após liberação do administrador',t('publish',**period).ok)
-check('Resultados ocultos sem permissão',not t().json()['elections'][0]['results'])
+check('Votação aberta impede republicação',t('publish',**period).status_code==409)
+check('Organizador recebe permissão de resultados','viewResults' in t().json()['me']['permissions'])
 value['permissions'].append('viewResults');assert a('account',value=value).ok
 # No ballots needed; permission appears and published election remains visible.
 check('Consulta de resultados liberada', 'viewResults' in t().json()['me']['permissions'])
 value['permissions']=[];assert a('account',value=value).ok
 check('Revogação aplicada sem novo login',t('close',electionId=eid).status_code==403 and t('electors',electionId=eid).status_code==403)
 value['permissions']=['manageVoters'];value['electionIds']=[foreign['id']];assert a('account',value=value).ok
-check('Administrador libera eleição existente para equipe',foreign['id'] in [e['id'] for e in t().json()['elections']])
-check('Eleitores de turma não liberada não são expostos',t('electors',electionId=foreign['id']).json()['rows']==[])
+check('Atribuição antiga não revela eleição alheia',foreign['id'] not in [e['id'] for e in t().json()['elections']])
+check('Eleitores de turma não liberada não são expostos',t('electors',electionId=foreign['id']).status_code==403)
 value['classes']=None;assert a('account',value=value).ok
 check('Acesso a todas as turmas explícito',len(t().json()['classes'])==len(a().json()['classes']))
 value['active']=0;assert a('account',value=value).ok

@@ -9,6 +9,7 @@ require __DIR__ . '/../server/app.php';
 require __DIR__ . '/../server/v2.php';
 require __DIR__ . '/../server/access-v2.php';
 require __DIR__ . '/../server/roster-v2.php';
+require __DIR__ . '/../server/lifecycle-v2.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
@@ -33,6 +34,12 @@ try {
     if ($path === '/api/v2/tally') {
         \Urna\v2Tally();
     }
+    if ($path === '/api/v2/public-tally') {
+        \Urna\v2Tally(true);
+    }
+    if ($path === '/api/v2/election-history') {
+        \Urna\v2ElectionHistory();
+    }
     if (preg_match('#^/api/v2/urna/([a-zA-Z0-9-]+)$#D', $path, $m)) {
         \Urna\v2Public($m[1]);
     }
@@ -55,7 +62,7 @@ try {
         \Urna\fail('Endereço não encontrado.', 404);
     }
     \Urna\method('GET', 'HEAD');
-    if (preg_match('#^/v2(?:/urna/[a-zA-Z0-9-]+)?/?$#D', $path)) {
+    if (preg_match('#^/v2(?:/urna/[a-zA-Z0-9-]+|/apuracao/[a-f0-9]{64})?/?$#D', $path)) {
         header('Cache-Control: no-store');
         header('Content-Type: text/html; charset=utf-8');
         readfile(__DIR__ . '/v2.html');

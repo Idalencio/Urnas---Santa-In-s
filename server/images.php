@@ -117,6 +117,25 @@ function imageEndpoint(?string $id = null): never
         }
     }
     if (!$allowed) {
+        $link = clean($_GET['tally'] ?? '', 65);
+        if (preg_match('/^[a-f0-9]{64}$/D', $link)) {
+            $r = one(
+                'SELECT candidate_snapshot FROM v2_elections WHERE public_token=? AND published=1',
+                [$link],
+            );
+            foreach (
+                json_decode($r['candidate_snapshot'] ?? '[]', true, 64, JSON_THROW_ON_ERROR)
+                as $c
+            ) {
+                if (
+                    in_array('/api/images/' . $id, [$c['image'] ?? '', $c['viceImage'] ?? ''], true)
+                ) {
+                    $allowed = true;
+                }
+            }
+        }
+    }
+    if (!$allowed) {
         fail('Acesso restrito.', 403);
     }
     $path = ROOT . '/storage/uploads/' . $id;

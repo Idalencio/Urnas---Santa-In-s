@@ -5,6 +5,10 @@ const enc = new TextEncoder();
 const DB = () => env.DB as D1Database;
 const uuid = () => crypto.randomUUID();
 const date = (n = 0) => new Date(Date.now() + n).toISOString();
+const publicToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
 function fail(message: string, status = 400): never {
   throw Object.assign(Error(message), { status });
 }
@@ -65,7 +69,13 @@ function election(s: any, id: string) {
 }
 function draft(s: any, id: string) {
   const e = election(s, id);
-  if (e.published || e.closed) fail('Esta eleição já foi publicada. Duplique-a para alterar.', 409);
+  if (e.deletedAt || !['draft', 'scheduled'].includes(status(e)))
+    fail('A eleição já abriu e não pode mais ser editada.', 409);
+  if (
+    s.ballots.some((b: any) => b.electionId === id) ||
+    (s.electors[id] || []).some((r: any) => r.voted)
+  )
+    fail('Esta eleição possui votos e não pode ser editada.', 409);
   return e;
 }
 function terminal(s: any, id: string) {
@@ -83,7 +93,10 @@ function electionTerminals(s: any, eid: string) {
 }
 function terminalChoices(s: any, tid: string) {
   return s.elections
-    .filter((e: any) => linked(s, tid, e.id) && ['active', 'scheduled'].includes(status(e)))
+    .filter(
+      (e: any) =>
+        !e.deletedAt && linked(s, tid, e.id) && ['active', 'scheduled'].includes(status(e)),
+    )
     .map((e: any) => ({
       id: e.id,
       name: e.name,
@@ -100,7 +113,9 @@ function resolveElection(s: any, tid: string, requested: string) {
     requested = choices[0].id;
   }
   if (!linked(s, tid, requested)) fail('Esta eleição não está disponível nesta urna.', 409);
-  return election(s, requested);
+  const e = election(s, requested);
+  if (e.deletedAt) fail('Esta eleição não está disponível nesta urna.', 409);
+  return e;
 }
 function matricula(v: any) {
   const m = clean(v, 81);
@@ -115,7 +130,7 @@ async function load() {
       .first<any>();
     if (!r) fail('Entre no painel para preparar o ambiente de testes.', 503);
     const s = JSON.parse(r.value);
-    if (!Object.prototype.hasOwnProperty.call(s, 'mfa'))
+    if (!Object.prototype.hasOwnProperty.call(s, 'mfa') && s.workflowVersion === 1)
       return { s, revision: r.revision, raw: r.value };
     // Retira somente credenciais da funcionalidade descontinuada. Preserva votos e cadastros.
     for (const [id, m] of Object.entries(s.mfa || {}) as [string, any][])
@@ -124,6 +139,8 @@ async function load() {
         if (a) a.authVersion = Number(a.authVersion || 1) + 1;
       }
     delete s.mfa;
+    for (const e of s.elections) if (e.published && !e.publicToken) e.publicToken = publicToken();
+    s.workflowVersion = 1;
     const raw = JSON.stringify(s);
     const [updated] = await DB().batch([
       DB()
@@ -268,6 +285,11 @@ async function throttle(id: string, limit = 45, duration = 60000) {
   if (r.attempts > limit) fail('Muitas tentativas. Aguarde alguns minutos.', 429);
 }
 const PERMISSIONS = ['manageElections', 'manageVoters', 'publishElections', 'viewResults'];
+function electionPermissions(p: string[]) {
+  return p.some((x) => ['manageElections', 'manageVoters', 'publishElections'].includes(x))
+    ? PERMISSIONS
+    : p.filter((x) => x === 'viewResults');
+}
 function account(s: any, id: string) {
   if (id === 'demo-admin')
     return {
@@ -368,14 +390,14 @@ function profile(a: any, s: any) {
     role: a.role,
     active: a.active,
     owner: a.owner || 0,
-    permissions: a.role === 'admin' ? PERMISSIONS : a.permissions || [],
+    permissions: a.role === 'admin' ? PERMISSIONS : electionPermissions(a.permissions || []),
     classes:
       a.role === 'admin'
         ? null
         : a.classes === null
           ? null
           : [...new Set((a.classes || []).map((c: string) => canonicalClass(s, c)))],
-    electionIds: a.role === 'admin' ? [] : a.electionIds || [],
+    electionIds: [],
   };
 }
 function can(me: any, p: string) {
@@ -389,7 +411,7 @@ function classAllowed(me: any, c: string, s: any) {
   );
 }
 function hasElection(me: any, e: any) {
-  return me.role === 'admin' || e.ownerId === me.id || (me.electionIds || []).includes(e.id);
+  return me.role === 'admin' || (!e.deletedAt && e.ownerId === me.id);
 }
 /** A API valida permissões e escopos em toda operação, inclusive chamadas diretas. */
 function access(s: any, me: any, action: string, b: any) {
@@ -416,6 +438,7 @@ function access(s: any, me: any, action: string, b: any) {
       image: 'manageElections',
       enroll: 'manageVoters',
       electors: 'manageVoters',
+      roster: 'manageVoters',
       unlock: 'manageVoters',
       publish: 'publishElections',
       close: 'publishElections',
@@ -520,7 +543,7 @@ function state(s: any, me: any) {
       electionId: t.electionId && hasElection(me, election(s, t.electionId)) ? t.electionId : null,
     })),
     elections: s.elections
-      .filter((e: any) => hasElection(me, e))
+      .filter((e: any) => !e.deletedAt && hasElection(me, e))
       .map((e: any) => ({
         ...e,
         terminalIds: electionTerminals(s, e.id).map((t: any) => t.id),
@@ -545,13 +568,22 @@ function state(s: any, me: any) {
   };
 }
 /** A fotografia D1 vem de uma única leitura; não expõe dados individuais dos eleitores. */
-async function tally(req: Request) {
+async function tally(req: Request, publicView = false) {
   if (req.method !== 'GET') fail('Método não permitido.', 405);
-  const me = await user(req);
-  if (!can(me, 'viewResults')) fail('O administrador não liberou esta ação para sua conta.', 403);
+  const params = new URL(req.url).searchParams;
+  const me = publicView ? null : await user(req);
+  if (me && !can(me, 'viewResults'))
+    fail('O administrador não liberou esta ação para sua conta.', 403);
   const { s } = await load();
-  const e = election(s, new URL(req.url).searchParams.get('election') || '');
-  if (!hasElection(me, e)) fail('Esta eleição não foi liberada para sua conta.', 403);
+  const link = params.get('token') || '';
+  if (publicView && !/^[a-f0-9]{64}$/.test(link)) fail('Apuração não encontrada.', 404);
+  const e = publicView
+    ? s.elections.find((e: any) => e.published && e.publicToken === link)
+    : election(s, params.get('election') || '');
+  if (!e) fail('Apuração não encontrada.', 404);
+  if (me && !hasElection(me, e)) fail('Esta eleição não foi liberada para sua conta.', 403);
+  const photo = (path: string) =>
+    publicView && path?.startsWith('/api/images/') ? path + '?tally=' + link : path || '';
   if (!e.published) fail('A apuração fica disponível depois de publicar a eleição.', 409);
   const votes = new Map<string, number>();
   for (const b of s.ballots)
@@ -561,15 +593,15 @@ async function tally(req: Request) {
     id: c.id,
     name: c.name,
     code: c.code,
-    image: c.image || '',
+    image: photo(c.image),
     viceName: c.viceName || '',
-    viceImage: c.viceImage || '',
+    viceImage: photo(c.viceImage),
     votes: votes.get(c.id) || 0,
   }));
   const rows = s.electors[e.id] || [];
   return json({
     election: {
-      id: e.id,
+      id: publicView ? link : e.id,
       name: e.name,
       status: status(e),
       startsAt: e.startsAt,
@@ -593,7 +625,7 @@ function saveAccount(s: any, me: any, v: any, password: string | null) {
     role = v.role || 'staff',
     permissions = v.permissions || [],
     classes = v.classes === undefined ? [] : v.classes,
-    electionIds = v.electionIds || [],
+    electionIds: string[] = [],
     active = v.active ? 1 : 0;
   if (!name || !/^[a-z0-9][a-z0-9._-]{2,79}$/.test(username) || !['admin', 'staff'].includes(role))
     fail('Informe nome e usuário de 3 a 80 caracteres, sem espaços ou acentos.');
@@ -640,7 +672,7 @@ function saveAccount(s: any, me: any, v: any, password: string | null) {
     role,
     active,
     owner: 0,
-    permissions: [...new Set(permissions)],
+    permissions: electionPermissions(permissions),
     classes: classes === null ? null : [...new Set(classes)],
     electionIds: [...new Set(electionIds)],
     password: password || old?.password,
@@ -783,6 +815,78 @@ async function upload(b: any) {
   await env.BUCKET.put(id, data, { httpMetadata: { contentType: mime } });
   return { image: '/api/images/' + id };
 }
+/** Selecionar participantes não concede acesso ao cadastro geral de alunos. */
+function rosterRows(s: any, me: any, id: string) {
+  const e = election(s, id);
+  if (!hasElection(me, e)) fail('Esta eleição não foi liberada para sua conta.', 403);
+  const saved = s.electors[id] || [],
+    selected = new Set(saved.map((r: any) => r.matricula));
+  const byId = new Map<string, any>(saved.map((r: any) => [r.matricula, r]));
+  for (const row of activeStudents(s)) if (!byId.has(row.matricula)) byId.set(row.matricula, row);
+  return [...byId.values()]
+    .map((r: any) => ({
+      matricula: r.matricula,
+      name: r.name,
+      className: canonicalClass(s, r.className),
+      selected: selected.has(r.matricula),
+    }))
+    .filter((r: any) => classAllowed(me, r.className, s))
+    .sort(
+      (a, b) =>
+        a.className.localeCompare(b.className, 'pt-BR') ||
+        a.name.localeCompare(b.name, 'pt-BR') ||
+        a.matricula.localeCompare(b.matricula),
+    );
+}
+/** Uma alteração agendada deve manter o eleitorado e a fotografia prontos para abrir. */
+function refreshScheduled(s: any, e: any) {
+  if (!e.published) return;
+  const candidates = e.candidates
+    .filter((c: any) => c.active)
+    .map((c: any) => ({
+      ...c,
+      viceName: e.hasVice ? c.viceName : '',
+      viceImage: e.hasVice ? c.viceImage : '',
+    }));
+  if (!candidates.length || (e.hasVice && candidates.some((c: any) => !c.viceName)))
+    fail('Mantenha candidatos e vices completos na eleição agendada.');
+  if (
+    electionTerminals(s, e.id).some((t: any) => t.model === 'images') &&
+    candidates.some((c: any) => !c.image || (e.hasVice && !c.viceImage))
+  )
+    fail('A urna por imagens exige fotos de todos os candidatos e vices.');
+  if (e.requireMatricula && !(s.electors[e.id] || []).length)
+    fail('A eleição agendada precisa ter eleitores selecionados.');
+  e.candidateSnapshot = clone(candidates);
+}
+async function electionHistory(req: Request) {
+  if (req.method !== 'GET') fail('Método não permitido.', 405);
+  const me = await user(req);
+  if (me.role !== 'admin') fail('Somente administradores podem consultar o histórico.', 403);
+  const { s } = await load();
+  return json({
+    rows: s.elections.map((e: any) => ({
+      id: e.id,
+      name: e.name,
+      digits: e.digits,
+      hasVice: e.hasVice,
+      requireMatricula: e.requireMatricula,
+      published: e.published,
+      closed: e.closed,
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+      deletedAt: e.deletedAt || null,
+      deletedBy: e.deletedBy || null,
+      ownerName: e.ownerId ? accountName(s, e.ownerId) : 'Cadastro anterior',
+      voteCount: s.ballots.filter((b: any) => b.electionId === e.id).length,
+    })),
+  });
+}
+function accountName(s: any, id: string) {
+  return id === 'demo-admin'
+    ? s.adminName || 'Administrador'
+    : (s.accounts || []).find((a: any) => a.id === id)?.name || 'Conta anterior';
+}
 async function admin(req: Request, b: any) {
   const me = await user(req),
     action = b.action,
@@ -812,6 +916,7 @@ async function admin(req: Request, b: any) {
   if (action === 'csvPreview') {
     return json(csvPlan(snapshot, csvRows(b.csv)));
   }
+  if (action === 'roster') return json({ rows: rosterRows(snapshot, me, b.electionId) });
   if (action === 'electors') {
     const { s } = await load();
     return json({
@@ -850,6 +955,7 @@ async function admin(req: Request, b: any) {
             hasVice: v.hasVice ? 1 : 0,
             requireMatricula: v.requireMatricula ? 1 : 0,
           });
+          refreshScheduled(s, e);
           return { ok: true, id: e.id };
         }
         const id = uuid();
@@ -871,22 +977,21 @@ async function admin(req: Request, b: any) {
       }
       if (action === 'deleteElection') {
         const e = election(s, b.electionId);
-        if (e.published || e.closed)
-          fail('Somente eleições em preparação podem ser excluídas.', 409);
+        if (status(e) === 'active') fail('Encerre a votação antes de excluir a eleição.', 409);
+        if (e.deletedAt) fail('Esta eleição já foi excluída.', 409);
         if (
-          s.ballots.some((vote: any) => vote.electionId === e.id) ||
-          (s.electors[e.id] || []).some((voter: any) => voter.voted)
-        ) {
-          fail('Esta eleição possui registros de votação e não pode ser excluída.', 409);
-        }
-        // A mutação com revisão torna exclusão e publicação concorrentes incompatíveis.
-        s.elections = s.elections.filter((item: any) => item.id !== e.id);
-        delete s.electors[e.id];
-        if (s.electionTerminalLinks) delete s.electionTerminalLinks[e.id];
+          !e.published &&
+          (s.ballots.some((b: any) => b.electionId === e.id) ||
+            (s.electors[e.id] || []).some((r: any) => r.voted))
+        )
+          fail('Esta eleição possui votos. Confira o cadastro antes de excluir.', 409);
+        e.deletedAt = date();
+        e.deletedBy = current.id;
+        if (e.published) e.closed = 1;
         for (const terminal of s.terminals)
           if (terminal.electionId === e.id) terminal.electionId = null;
-        for (const account of s.accounts || [])
-          account.electionIds = (account.electionIds || []).filter((id: string) => id !== e.id);
+        for (const r of s.electors[e.id] || [])
+          Object.assign(r, { gateHash: null, expires: 0, terminalId: null });
         return { ok: true };
       }
       if (action === 'candidate') {
@@ -920,6 +1025,7 @@ async function admin(req: Request, b: any) {
           if (i < 0) fail('Candidato não pertence à eleição.');
           e.candidates[i] = c;
         } else e.candidates.push(c);
+        refreshScheduled(s, e);
         return { ok: true, id: c.id };
       }
       if (action === 'csvImport') {
@@ -947,7 +1053,9 @@ async function admin(req: Request, b: any) {
       }
       if (action === 'enroll') {
         const e = draft(s, b.electionId),
-          classes = b.classes || [];
+          classes = b.classes || [],
+          explicit = Object.hasOwn(b, 'matriculas');
+        const selected = b.matriculas || [];
         if (
           !Array.isArray(classes) ||
           classes.length > 500 ||
@@ -955,22 +1063,38 @@ async function admin(req: Request, b: any) {
         )
           fail('Selecione as turmas.');
         if (
+          explicit &&
+          (!Array.isArray(selected) ||
+            selected.length > 20000 ||
+            selected.some((m: any) => typeof m !== 'string'))
+        )
+          fail('Seleção de alunos inválida.');
+        if (
           current.role !== 'admin' &&
-          (!classes.length || classes.some((c: string) => !classAllowed(current, c, s)))
+          ((!classes.length && !explicit) ||
+            classes.some((c: string) => !classAllowed(current, c, s)))
         )
           fail('Selecione apenas as turmas liberadas para sua conta.', 403);
         const resolved = classes.map((c: string) => canonicalClass(s, c));
-        const rows = activeStudents(s).filter(
-          (r: any) => !resolved.length || resolved.includes(r.className),
+        const pool = explicit ? rosterRows(s, current, e.id) : activeStudents(s);
+        const rows = pool.filter(
+          (r: any) =>
+            (!resolved.length ? !explicit : resolved.includes(r.className)) &&
+            (!explicit || selected.includes(r.matricula)),
         );
-        if (!rows.length) fail('Não há alunos nas turmas selecionadas.');
+        if (explicit && new Set(selected).size !== rows.length)
+          fail('Há alunos fora das turmas selecionadas ou do seu acesso.', 403);
+        if (!rows.length && !explicit) fail('Não há alunos nas turmas selecionadas.');
         s.electors[e.id] = rows.map((r: any) => ({
-          ...r,
+          matricula: r.matricula,
+          name: r.name,
+          className: r.className,
           voted: 0,
           gateHash: null,
           expires: 0,
           terminalId: null,
         }));
+        refreshScheduled(s, e);
         return { ok: true };
       }
       if (action === 'terminal') {
@@ -1055,6 +1179,7 @@ async function admin(req: Request, b: any) {
           startsAt: start.toISOString(),
           endsAt: end.toISOString(),
           candidateSnapshot: clone(candidates),
+          publicToken: e.publicToken || publicToken(),
         });
         return { ok: true };
       }
@@ -1084,6 +1209,9 @@ async function admin(req: Request, b: any) {
           startsAt: null,
           endsAt: null,
           candidateSnapshot: [],
+          publicToken: null,
+          deletedAt: null,
+          deletedBy: null,
           candidates: old.candidates.map((c: any) => ({ ...c, id: uuid(), electionId: id })),
         });
         return { ok: true, id };
@@ -1409,6 +1537,8 @@ export async function endpoint(req: Request) {
     }
     if (path === '/api/v2/audit') return await auditEndpoint(req);
     if (path === '/api/v2/tally') return await tally(req);
+    if (path === '/api/v2/public-tally') return await tally(req, true);
+    if (path === '/api/v2/election-history') return await electionHistory(req);
     if (path === '/api/v2/app') {
       if (req.method === 'GET') {
         const me = await user(req);
@@ -1432,6 +1562,17 @@ export async function endpoint(req: Request) {
             status(e) === 'active' &&
             e.candidateSnapshot.some((c: any) => [c.image, c.viceImage].includes(path)),
         );
+      }
+      if (!allowed) {
+        const link = new URL(req.url).searchParams.get('tally') || '';
+        allowed =
+          /^[a-f0-9]{64}$/.test(link) &&
+          s.elections.some(
+            (e: any) =>
+              e.published &&
+              e.publicToken === link &&
+              e.candidateSnapshot.some((c: any) => [c.image, c.viceImage].includes(path)),
+          );
       }
       if (!allowed) fail('Imagem não disponível.', 403);
       const object = await env.BUCKET.get(image[1]);

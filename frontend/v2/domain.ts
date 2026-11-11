@@ -27,6 +27,8 @@ export type Election = {
   requireMatricula: number;
   candidateSnapshot: Candidate[];
   results: { candidateId: string; kind: string; total: number }[];
+  publicToken?: string;
+  deletedAt?: string | null;
   electorCount?: number;
   votedCount?: number;
   terminalId?: string;
@@ -52,13 +54,15 @@ export function requestId() {
   );
 }
 export function status(e: Election, now = Date.now()) {
-  return e.closed || now >= Date.parse(e.endsAt)
+  return e.closed
     ? 'closed'
     : !e.published
       ? 'draft'
-      : now < Date.parse(e.startsAt)
-        ? 'scheduled'
-        : 'active';
+      : now >= Date.parse(e.endsAt)
+        ? 'closed'
+        : now < Date.parse(e.startsAt)
+          ? 'scheduled'
+          : 'active';
 }
 export function voteChoice(e: Election, code: string, blank = false) {
   if (blank) throw Error('Escolha um candidato válido.');

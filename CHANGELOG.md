@@ -1,5 +1,17 @@
 # Histórico de alterações
 
+## 11/11/2026 — Fluxo completo, apuração pública e arquivo de eleições
+
+- Home com identidade do colégio, próximos passos e crédito da T.I.
+- Seleção de turmas inteiras com marcação individual e desmarcação de alunos por eleição.
+- Permissão unificada para organizar a própria eleição; turmas, alunos, acessos e histórico exclusivos de administradores.
+- Edição de eleições agendadas, com fotografia atualizada e bloqueio a partir da abertura.
+- Apuração pública por link aleatório, sem dados de eleitores, com consulta a cada cinco minutos e resultado final preservado.
+- Exclusão lógica de eleições em preparação, agendadas e encerradas; arquivo administrativo inclui eleições excluídas e não excluídas.
+- Migração SQL 008 e regras equivalentes no adaptador D1.
+
+Validação: 341 verificações HTTP PHP/MySQL em banco descartável, 334 verificações do adaptador D1, 35 verificações de temporizadores/exportação, tipos das duas interfaces, sintaxe PHP e conferência visual da home, seleção individual, agendamento, acessos, histórico e apuração pública.
+
 ## 09/11/2026 — Painel de apuração
 
 - Nova aba Apuração, com seleção de eleições publicadas, fotos de candidato e vice, ranking, votos, percentuais e participação.

@@ -3,7 +3,7 @@
 O usuário solicitou que o projeto fique estruturado, comentado e que toda alteração
 feita por aqui também seja atualizada no GitHub.
 
-- Repositório escolhido: `https://github.com/Idalencio/Urnas---Santa-In-s`.
+- Repositório escolhido: `https://github.com/Idalencio/Urnas-Santa-Ines`.
 - A branch principal é `main`. Preserve o histórico e as alterações de outras pessoas.
 - Ao concluir uma alteração autorizada, valide, faça commit e envie ao `origin`.
   Confira o commit remoto. Não use force push. Se o envio falhar, informe o bloqueio;

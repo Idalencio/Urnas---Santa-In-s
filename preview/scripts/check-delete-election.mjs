@@ -104,7 +104,7 @@ const initial = await current(),
 const create = async () => (await app('duplicate', { electionId: published.id })).body.id;
 const remove = (id) => app('deleteElection', { electionId: id });
 ok((await remove(published.id)).status === 409, 'Publicada não pode ser excluída');
-const id = await create();
+let id = await create();
 await app('enroll', { electionId: id, classes: ['6A'] });
 const value = {
   name: 'Equipe exclusão',
@@ -124,25 +124,33 @@ r = await call(
   false,
 );
 const teamSession = { cookie: r.headers.get('set-cookie').split(';')[0], panel: r.body.panelKey };
-async function teamRemove(target) {
+async function teamCall(action, data) {
   const prev = { cookie, panel };
   cookie = teamSession.cookie;
   panel = teamSession.panel;
   try {
-    return await remove(target);
+    return await app(action, data);
   } finally {
     cookie = prev.cookie;
     panel = prev.panel;
   }
 }
+const teamRemove = (target) => teamCall('deleteElection', { electionId: target });
 ok((await teamRemove(id)).status === 403, 'Sem permissão não exclui nem eleição atribuída');
 await app('account', {
   value: { ...value, id: uid, password: '', permissions: ['manageElections'] },
 });
+ok((await teamRemove(id)).status === 403, 'Permissão não amplia atribuições antigas');
+id = (
+  await teamCall('election', {
+    value: { name: 'Rascunho da equipe', digits: 3, hasVice: 0, requireMatricula: 1 },
+  })
+).body.id;
+assert.equal((await teamCall('enroll', { electionId: id, classes: ['6A'] })).status, 200);
 const foreign = await create();
 ok((await teamRemove(foreign)).status === 403, 'Permissão não libera eleição alheia');
 const before = await current();
-ok((await teamRemove(id)).status === 200, 'Equipe autorizada exclui rascunho atribuído');
+ok((await teamRemove(id)).status === 200, 'Equipe exclui o próprio rascunho');
 let after = await current();
 ok(!after.elections.some((e) => e.id === id), 'Rascunho removido do painel');
 ok(!after.accounts.find((a) => a.id === uid).electionIds.includes(id), 'Atribuição removida');
@@ -159,16 +167,16 @@ ok(
     JSON.stringify(before.elections.find((e) => e.id === published.id)),
   'Eleição publicada e resultado preservados',
 );
-ok((await remove(id)).status === 404, 'Repetição não apaga outra eleição');
+ok((await remove(id)).status === 409, 'Repetição não apaga outra eleição');
 ok((await remove('inexistente')).status === 404, 'Identificador desconhecido recusado');
 let raw = JSON.parse(sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value);
 ok(
-  !raw.electors[id] && !raw.elections.some((e) => e.id === id),
-  'Eleitorado e candidatos do rascunho removidos',
+  raw.electors[id].length > 0 && !!raw.elections.find((e) => e.id === id)?.deletedAt,
+  'Exclusão lógica preserva a eleição e seu eleitorado',
 );
 const closed = await create();
 await app('close', { electionId: closed });
-ok((await remove(closed)).status === 409, 'Encerrada não pode ser excluída');
+ok((await remove(closed)).status === 200, 'Encerrada pode sair das listas mantendo arquivo');
 const inconsistent = await create();
 raw = JSON.parse(sql.prepare("SELECT value FROM demo_state WHERE id='main'").get().value);
 raw.ballots.push({

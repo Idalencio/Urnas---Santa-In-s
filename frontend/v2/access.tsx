@@ -3,7 +3,6 @@ import { Check, Pencil, Plus, ShieldCheck } from 'lucide-react';
 import { Badge, Field, Modal } from '../app/components';
 import { ClassPicker, type SchoolClass } from './people';
 import { PageHeading } from './workflow';
-import type { Election } from './domain';
 export type TeamAccount = {
   id: string;
   name: string;
@@ -15,27 +14,11 @@ export type TeamAccount = {
   classes: string[] | null;
   electionIds: string[];
 };
-export const permissions = [
-  {
-    id: 'manageElections',
-    label: 'Preparar eleições',
-    text: 'Criar eleições, cadastrar candidatos e incluir fotos.',
-  },
-  {
-    id: 'manageVoters',
-    label: 'Definir quem pode votar',
-    text: 'Selecionar turmas, imprimir títulos e cancelar liberações.',
-  },
-  {
-    id: 'publishElections',
-    label: 'Abrir e encerrar a votação',
-    text: 'Escolher urnas e definir o período de votação.',
-  },
-  {
-    id: 'viewResults',
-    label: 'Consultar resultados',
-    text: 'Ver a apuração e baixar os resultados.',
-  },
+export const electionPermissions = [
+  'manageElections',
+  'manageVoters',
+  'publishElections',
+  'viewResults',
 ];
 export const allowed = (me: TeamAccount | undefined, key: string) =>
   !!me && (me.role === 'admin' || me.permissions?.includes(key));
@@ -43,7 +26,6 @@ function AccountForm({
   value,
   me,
   classes,
-  elections,
   busy,
   save,
   cancel,
@@ -51,7 +33,6 @@ function AccountForm({
   value?: TeamAccount;
   me: TeamAccount;
   classes: SchoolClass[];
-  elections: Election[];
   busy: boolean;
   save: (v: any) => Promise<void>;
   cancel: () => void;
@@ -65,7 +46,7 @@ function AccountForm({
             password: '',
             role: 'staff',
             active: 1,
-            permissions: ['manageElections', 'manageVoters'],
+            permissions: electionPermissions,
             classes: [],
             electionIds: [],
           },
@@ -152,26 +133,27 @@ function AccountForm({
         <>
           <fieldset className="team-permissions">
             <legend>Permissões nas eleições</legend>
-            {permissions.map((p) => (
-              <label key={p.id}>
-                <input
-                  type="checkbox"
-                  checked={v.permissions.includes(p.id)}
-                  onChange={(ev) =>
-                    change(
-                      'permissions',
-                      ev.target.checked
-                        ? [...v.permissions, p.id]
-                        : v.permissions.filter((x: string) => x !== p.id),
-                    )
-                  }
-                />
-                <span>
-                  <strong>{p.label}</strong>
-                  <small>{p.text}</small>
-                </span>
-              </label>
-            ))}
+            <label>
+              <input
+                type="checkbox"
+                checked={v.permissions.some((p: string) =>
+                  electionPermissions.slice(0, 3).includes(p),
+                )}
+                onChange={(ev) =>
+                  change('permissions', ev.target.checked ? electionPermissions : ['viewResults'])
+                }
+              />
+              <span>
+                <strong>Criar e gerenciar próprias eleições</strong>
+                <small>
+                  Inclui candidatos, seleção de eleitores, agendamento, abertura, encerramento e
+                  resultados.
+                </small>
+              </span>
+            </label>
+            <p className="team-scope-hint">
+              Cada pessoa vê apenas as eleições que criou. Administradores têm acesso a todas.
+            </p>
             <p className="team-roster-note">
               Somente administradores podem importar listas ou alterar o cadastro de alunos.
             </p>
@@ -199,35 +181,6 @@ function AccountForm({
                 onChange={(x) => change('classes', x)}
               />
             )}
-          </fieldset>
-          <fieldset className="team-election-scope">
-            <legend>Eleições adicionais</legend>
-            <p className="team-scope-hint">
-              As eleições criadas pela pessoa já ficam disponíveis para ela. Marque outras que
-              também poderá acessar.
-            </p>
-            <div className="team-election-grants">
-              {elections.length === 0 && (
-                <p className="team-empty-scope">Nenhuma eleição cadastrada.</p>
-              )}
-              {elections.map((e) => (
-                <label key={e.id}>
-                  <input
-                    type="checkbox"
-                    checked={v.electionIds.includes(e.id)}
-                    onChange={(ev) =>
-                      change(
-                        'electionIds',
-                        ev.target.checked
-                          ? [...v.electionIds, e.id]
-                          : v.electionIds.filter((x: string) => x !== e.id),
-                      )
-                    }
-                  />
-                  {e.name}
-                </label>
-              ))}
-            </div>
           </fieldset>
         </>
       )}
@@ -257,14 +210,12 @@ export function TeamPanel({
   accounts,
   me,
   classes,
-  elections,
   busy,
   save,
 }: {
   accounts: TeamAccount[];
   me: TeamAccount;
   classes: SchoolClass[];
-  elections: Election[];
   busy: boolean;
   save: (v: any) => Promise<void>;
 }) {
@@ -324,7 +275,6 @@ export function TeamPanel({
             value={editing || undefined}
             me={me}
             classes={classes}
-            elections={elections}
             busy={busy}
             cancel={() => setEditing(undefined)}
             save={async (v) => {

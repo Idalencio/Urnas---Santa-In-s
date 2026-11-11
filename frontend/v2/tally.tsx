@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { BarChart3, CheckCircle2, Clock3, Download, RefreshCw, Users, Vote } from 'lucide-react';
+import {
+  BarChart3,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  Trash2,
+  Users,
+  Vote,
+} from 'lucide-react';
 import { csvDownload, Empty, formatted } from '../app/components';
 import { status, type Election } from './domain';
 import {
@@ -18,12 +29,20 @@ const labels = {
   closed: 'Encerrada',
   draft: 'Em preparação',
 };
-async function readTally(id: string, signal: AbortSignal): Promise<TallySnapshot> {
-  const response = await fetch('/api/v2/tally?election=' + encodeURIComponent(id), {
-    cache: 'no-store',
-    signal,
-    headers: { 'X-Urna-Panel': sessionStorage.getItem('urna_panel_key') || '' },
-  });
+async function readTally(
+  id: string,
+  signal: AbortSignal,
+  publicView = false,
+): Promise<TallySnapshot> {
+  const response = await fetch(
+    (publicView ? '/api/v2/public-tally?token=' : '/api/v2/tally?election=') +
+      encodeURIComponent(id),
+    {
+      cache: 'no-store',
+      signal,
+      headers: { 'X-Urna-Panel': sessionStorage.getItem('urna_panel_key') || '' },
+    },
+  );
   let body: any;
   try {
     body = await response.json();
@@ -263,7 +282,16 @@ export function TallyBoard({ snapshot }: { snapshot: TallySnapshot }) {
   );
 }
 
-function ElectionTally({ id, report }: { id: string; report: (snapshot: TallySnapshot) => void }) {
+const ignoreReport = (_snapshot: TallySnapshot) => {};
+export function ElectionTally({
+  id,
+  report = ignoreReport,
+  publicView = false,
+}: {
+  id: string;
+  report?: (snapshot: TallySnapshot) => void;
+  publicView?: boolean;
+}) {
   const [feed, setFeed] = useState<TallyFeedState>({
     snapshot: null,
     loading: true,
@@ -273,16 +301,20 @@ function ElectionTally({ id, report }: { id: string; report: (snapshot: TallySna
   });
   const watcher = useRef<ReturnType<typeof followTally> | null>(null);
   useEffect(() => {
-    const current = followTally(id, readTally, (next) => {
-      setFeed(next);
-      if (next.snapshot) report(next.snapshot);
-    });
+    const current = followTally(
+      id,
+      (key, signal) => readTally(key, signal, publicView),
+      (next) => {
+        setFeed(next);
+        if (next.snapshot) report(next.snapshot);
+      },
+    );
     watcher.current = current;
     return () => {
       current.stop();
       watcher.current = null;
     };
-  }, [id, report]);
+  }, [id, report, publicView]);
   const { snapshot, loading, error, nextUpdateAt, blocked } = feed;
   const closed = snapshot?.election.status === 'closed';
   return (
@@ -402,10 +434,12 @@ export default function TallyPanel({
   elections,
   selectedId,
   select,
+  remove,
 }: {
   elections: Election[];
   selectedId: string;
   select: (id: string) => void;
+  remove?: (e: Election) => void;
 }) {
   const [reported, setReported] = useState<Record<string, TallySnapshot['election']['status']>>({});
   const report = useCallback((snapshot: TallySnapshot) => {
@@ -419,6 +453,7 @@ export default function TallyPanel({
       return order[status(a)] - order[status(b)] || a.name.localeCompare(b.name, 'pt-BR');
     });
   const id = choices.some((e) => e.id === selectedId) ? selectedId : choices[0]?.id || '';
+  const selected = choices.find((e) => e.id === id);
   useEffect(() => {
     if (id && selectedId !== id) select(id);
   }, [id, selectedId, select]);
@@ -443,6 +478,17 @@ export default function TallyPanel({
           </label>
         )}
       </div>
+      {selected && (
+        <div className="tally-sharing-row">
+          {selected.publicToken && <TallyShare token={selected.publicToken} />}{' '}
+          {remove && status(selected) === 'closed' && (
+            <button className="text-button clean-danger" onClick={() => remove(selected)}>
+              <Trash2 size={16} />
+              Excluir eleição
+            </button>
+          )}
+        </div>
+      )}
       {id ? (
         <ElectionTally key={id} id={id} report={report} />
       ) : (
@@ -452,5 +498,46 @@ export default function TallyPanel({
         />
       )}
     </section>
+  );
+}
+
+export function TallyShare({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false),
+    [fallback, setFallback] = useState(false);
+  const path = '/v2/apuracao/' + token;
+  const url = location.origin + path;
+  return (
+    <div className="tally-share">
+      <div>
+        <strong>Apuração pública</strong>
+        <small>Qualquer pessoa com este link pode acompanhar os resultados.</small>
+      </div>
+      <button
+        className="button secondary small"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+          } catch {
+            setFallback(true);
+          }
+        }}
+      >
+        <Copy size={15} />
+        {copied ? 'Link copiado' : 'Copiar link'}
+      </button>
+      <a className="text-button" href={path} target="_blank" rel="noopener noreferrer">
+        Abrir
+        <ExternalLink size={15} />
+      </a>
+      {fallback && (
+        <input
+          aria-label="Link público da apuração"
+          readOnly
+          value={url}
+          onFocus={(ev) => ev.currentTarget.select()}
+        />
+      )}
+    </div>
   );
 }

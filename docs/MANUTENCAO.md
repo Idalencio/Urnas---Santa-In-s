@@ -1,7 +1,7 @@
 # Atualização do código e do GitHub
 
 O repositório principal escolhido pelo usuário é:
-`https://github.com/Idalencio/Urnas---Santa-In-s`, branch `main`.
+`https://github.com/Idalencio/Urnas-Santa-Ines`, branch `main`.
 
 O usuário autorizou que as alterações feitas por aqui também sejam registradas e
 enviadas ao GitHub. Essa orientação está em `AGENTS.md` para as próximas tarefas.

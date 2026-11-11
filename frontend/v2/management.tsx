@@ -194,11 +194,11 @@ export function ElectionList({
                 {!e.published ? 'Continuar' : 'Gerenciar'}
                 <ArrowRight size={16} />
               </button>
-              {remove && !e.published && !e.closed && (
+              {remove && status(e) !== 'active' && (
                 <button
                   className="icon-button draft-delete"
                   aria-label={'Excluir eleição ' + e.name}
-                  title="Excluir eleição em preparação"
+                  title="Excluir eleição"
                   onClick={() => remove(e)}
                 >
                   <Trash2 size={17} />
@@ -223,7 +223,7 @@ export function ElectionList({
               : filter === 'current'
                 ? canCreate
                   ? 'Comece pelos candidatos e escolha as turmas participantes.'
-                  : 'O administrador pode liberar eleições para sua conta em Acessos.'
+                  : 'As eleições criadas por sua conta aparecerão aqui.'
                 : 'Escolha outra situação para consultar as eleições.'
           }
           action={

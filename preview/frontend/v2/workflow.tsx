@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Monitor,
+  Home,
   Vote,
   Users,
   Settings,
@@ -32,10 +33,11 @@ export function Shell({
 }) {
   const [menu, setMenu] = useState(false);
   const nav = [
+    { id: 'home', label: 'Início', icon: Home },
     { id: 'elections', label: 'Eleições', icon: Vote },
     ...(canResults ? [{ id: 'tally', label: 'Apuração', icon: BarChart3 }] : []),
     { id: 'terminals', label: 'Urnas', icon: Monitor },
-    { id: 'students', label: 'Turmas', icon: Users },
+    ...(admin ? [{ id: 'students', label: 'Turmas', icon: Users }] : []),
     ...(admin
       ? [
           { id: 'team', label: 'Acessos', icon: ShieldCheck },
@@ -72,7 +74,7 @@ export function Shell({
           href="/v2"
           onClick={(ev) => {
             ev.preventDefault();
-            navigate('elections');
+            navigate('home');
           }}
         >
           <img src="/csi-logo.png" alt="Colégio Santa Inês" />

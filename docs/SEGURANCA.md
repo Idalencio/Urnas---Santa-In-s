@@ -64,3 +64,11 @@ node scripts/check-security.mjs
 ```
 
 Os registros de alunos não são cifrados individualmente no banco. Proteção de discos, acesso SSH/MySQL, firewall, atualizações do sistema operacional e cópias de segurança dependem da infraestrutura. A configuração real do CloudPanel e a restauração de backups não foram auditadas nesta entrega. Auditoria de dependências identifica alertas conhecidos naquele momento; não garante ausência de vulnerabilidades. Esta revisão não é uma certificação de segurança nem de conformidade legal.
+
+## Apuração pública e arquivo de eleições
+
+O endereço `/v2/apuracao/<token>` dispensa login e permite somente leitura de resultados agregados. O token contém 256 bits aleatórios; não é possível listar todas as eleições pela API pública. Fotos de eleições agendadas ou encerradas são liberadas apenas quando pertencem à eleição do link. O painel, o cadastro de alunos e o histórico continuam autenticados e autorizados no servidor.
+
+A equipe vê apenas eleições próprias. A permissão única de organizar inclui as etapas dependentes; não libera cadastro geral, importação, renomeação de turma, acessos ou histórico. A abertura é verificada sob a mesma trava da votação para bloquear alterações concorrentes.
+
+A migração 008 faz exclusão lógica das eleições. O arquivo administrativo mantém eleitores, candidatos e votos para consulta por administradores. O link público de uma eleição publicada continua mostrando seu resultado final; excluir um agendamento o encerra, impedindo que abra depois pelo endereço antigo.

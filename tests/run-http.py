@@ -125,7 +125,7 @@ return [
                     time.sleep(0.1)
             else:
                 raise RuntimeError("O servidor PHP local não respondeu.")
-            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py", "import-v2.py", "tally-v2.py", "security-v2.py"):
+            for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py", "import-v2.py", "tally-v2.py", "security-v2.py", "lifecycle-v2.py"):
                 subprocess.run([os.sys.executable, str(ROOT / "tests" / suite)], env=env, check=True)
         php(r"""
         require 'server/bootstrap.php';require 'server/auth.php';require 'server/v2.php';require 'server/access-v2.php';require 'server/roster-v2.php';

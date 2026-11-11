@@ -50,7 +50,7 @@ aid=app('account',value=account)['id']; staff=requests.Session(); login=staff.po
 sh={'X-Urna-Panel':login.json()['panelKey']}
 check('Sem permissão de resultados é bloqueado',tally(eid,staff,sh).status_code==403)
 app('account',value={**account,'id':aid,'password':'','permissions':['viewResults']})
-check('Permissão libera eleição atribuída',tally(eid,staff,sh).ok)
+check('Permissão não revela eleição alheia',tally(eid,staff,sh).status_code==403)
 check('Permissão não libera eleição alheia',tally(second,staff,sh).status_code==403)
 app('account',value={**account,'id':aid,'password':'','permissions':[]})
 check('Revogação vale na consulta seguinte',tally(eid,staff,sh).status_code==403)

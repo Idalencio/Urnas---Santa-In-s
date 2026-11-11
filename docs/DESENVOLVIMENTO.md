@@ -68,7 +68,7 @@ Variáveis aceitas: `URNA_TEST_DB_HOST` (padrão `127.0.0.1`), `URNA_TEST_DB_POR
 um serviço de banco de produção, mesmo que esteja no mesmo computador.
 
 As suites verificam voto e urnas compartilhadas, permissões da equipe, gestão
-manual/exclusão de alunos, exclusão de rascunhos, importação comparada por matrícula e apuração agregada. Os dados e as senhas são fictícios. O runner também valida
+manual/exclusão de alunos, exclusão lógica de eleições, importação comparada por matrícula e apuração agregada. A suite de ciclo completo verifica seleção individual, edição agendada, bloqueio na abertura, acesso público por link e arquivo administrativo. Os dados e as senhas são fictícios. O runner também valida
 a criação da credencial inicial sem exibir senha nem sobrescrever arquivo existente.
 
 O workflow `.github/workflows/validar.yml` repete os checks e testes em um MariaDB
@@ -81,3 +81,11 @@ A aba Apuração usa `GET /api/v2/tally?election=<id>` com sessão e `X-Urna-Pan
 O observador em `frontend/v2/tally-feed.ts` faz a primeira consulta imediatamente, depois a cada 300.000 ms. Usa o horário do servidor para antecipar a consulta à abertura/ao encerramento. Após resposta `closed`, não cria temporizador. Trocar eleição ou sair aborta a consulta e ignora respostas atrasadas. Falhas de rede preservam a última parcial, exibem erro e tentam novamente no próximo ciclo; perda de acesso remove os dados e interrompe as consultas. O carregamento geral de 20 segundos é suspenso nesta aba.
 
 `npm run test:tally` testa o tempo com relógio virtual, sem esperar cinco minutos. `tests/tally-v2.py` e `preview/scripts/check-tally.mjs` validam a API real em banco descartável: votos novos, reenvio idempotente, empate, separação por eleição, proteção de dados, permissões, revogação, agendamento e encerramento.
+
+## Fluxo atual de eleições
+
+A home apresenta os passos para preparar a votação. A equipe usa uma permissão de organização completa e apenas turmas liberadas, sempre nas eleições que criou. Turmas, cadastro geral, acessos e histórico são exclusivos de administradores.
+
+`tests/lifecycle-v2.py` e `preview/scripts/check-lifecycle.mjs` exercitam o fluxo completo com dados fictícios. Incluem acesso anônimo a `/api/v2/public-tally`, fotos em eleições agendadas/encerradas, tentativas de acesso a dados de outra pessoa, seleção individual e preservação de votos após exclusão. O observador público usa os mesmos temporizadores testados: consulta imediata, ciclos de cinco minutos e parada no encerramento.
+
+A API `/api/v2/election-history` é exclusiva de administradores e inclui eleições com `deleted_at`. A exclusão é lógica e não apaga votos. As listas normais não incluem essas eleições. Para que a prévia hospedada permita visitantes anônimos na apuração, o endereço deve estar público na hospedagem; a gestão continua protegida pelo login da aplicação.

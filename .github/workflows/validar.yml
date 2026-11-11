@@ -90,6 +90,7 @@ jobs:
           node scripts/check-delete-election.mjs
           node scripts/check-import.mjs
           node scripts/check-tally.mjs
+          node scripts/check-lifecycle.mjs
           node scripts/check-security.mjs
           node scripts/check-http-security.mjs
           pnpm exec tsc --noEmit

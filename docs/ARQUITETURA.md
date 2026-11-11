@@ -6,16 +6,17 @@ As imagens enviadas ficam em `storage/uploads`, referenciadas no banco.
 
 ## Serviço PHP
 
-| Arquivo                                | Responsabilidade                                              |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `server/bootstrap.php`                 | Configuração privada, PDO, transações, JSON, IDs e erros      |
-| `server/auth.php`                      | Sessões, senhas, login e aplicação das migrações              |
-| `server/access-v2.php`                 | Contas, escopos e autorização de cada ação                    |
-| `server/roster-v2.php`                 | Alunos, renomeação de turmas, aliases e exclusão lógica       |
-| `server/v2.php`                        | Eleições, candidatos, seleção de eleitores, publicação e voto |
-| `server/images.php`                    | Validação, gravação e entrega autorizada de fotos             |
-| `server/app.php`, `server/voting.php`  | Compatibilidade com a versão anterior                         |
-| `server/index.php`, `public/index.php` | Rotas de entrada; manter as duas cópias alinhadas             |
+| Arquivo                                | Responsabilidade                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `server/bootstrap.php`                 | Configuração privada, PDO, transações, JSON, IDs e erros                         |
+| `server/auth.php`                      | Sessões, senhas, login e aplicação das migrações                                 |
+| `server/access-v2.php`                 | Contas, escopos e autorização de cada ação                                       |
+| `server/lifecycle-v2.php`              | Seleção individual, fotografia agendada, links públicos e arquivo administrativo |
+| `server/roster-v2.php`                 | Alunos, renomeação de turmas, aliases e exclusão lógica                          |
+| `server/v2.php`                        | Eleições, candidatos, seleção de eleitores, publicação e voto                    |
+| `server/images.php`                    | Validação, gravação e entrega autorizada de fotos                                |
+| `server/app.php`, `server/voting.php`  | Compatibilidade com a versão anterior                                            |
+| `server/index.php`, `public/index.php` | Rotas de entrada; manter as duas cópias alinhadas                                |
 
 ## Interface V2
 
@@ -53,3 +54,5 @@ replica essa interface e as imagens de exemplo para `preview/`. Regras novas que
 afetem PHP e D1 precisam ser implementadas nos dois serviços.
 
 O dicionário completo das tabelas e a comunicação estão em [BANCO-DE-DADOS.md](BANCO-DE-DADOS.md).
+
+`frontend/v2/home.tsx` apresenta os próximos passos. `electors.tsx` concentra a seleção individual dentro da eleição; não altera o cadastro geral. `public-tally.tsx` renderiza somente a apuração pública e reutiliza o mesmo observador de cinco minutos. `election-archive.tsx` consulta o arquivo no histórico administrativo.
