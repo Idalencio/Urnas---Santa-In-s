@@ -6195,3 +6195,187 @@
     flex-direction: column;
   }
 }
+
+/* O formulário de acesso usa seções e listas, com a mesma tipografia do painel. */
+.team-account-form.editor-form {
+  display: block;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: #2b4059;
+  font-size: 14px;
+}
+.team-account-form .team-account-fields {
+  gap: 18px;
+}
+.team-account-form .field {
+  margin-bottom: 18px;
+  gap: 7px;
+}
+.team-account-form .field > span:first-child {
+  font-size: 13px;
+  font-weight: 600;
+}
+.team-account-form .field > small {
+  line-height: 1.5;
+}
+.team-account-form fieldset {
+  min-width: 0;
+  display: block;
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px solid #e5eaf0;
+}
+.team-account-form legend {
+  padding: 0 0 10px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #243d5c;
+}
+.team-account-form .team-permissions {
+  display: block;
+}
+.team-account-form .team-permissions > label {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.team-account-form .team-permissions > label + label {
+  border-top: 1px solid #f0f2f5;
+}
+.team-account-form .team-permissions > label > input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px !important;
+}
+.team-account-form .team-permissions strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2b4059;
+}
+.team-account-form .team-permissions small {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6d7b8e;
+  line-height: 1.45;
+}
+.team-roster-note {
+  margin: 12px 0 18px;
+  padding-top: 12px;
+  border-top: 1px solid #e5eaf0;
+  color: #68778a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.team-admin-note {
+  margin: 0 0 18px;
+  color: #68778a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.team-account-form .team-class-scope > .check-row {
+  margin: 0;
+  font-size: 13px;
+}
+.team-scope-hint {
+  margin: 7px 0 13px;
+  color: #6d7b8e;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.team-account-form .class-picker-tools {
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.team-account-form .class-picker-tools .clean-search {
+  flex: 1;
+  width: auto;
+}
+.team-account-form .class-picker-grid {
+  gap: 0 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.team-account-form .class-picker-grid > label {
+  padding: 8px;
+  border: 0;
+  border-bottom: 1px solid #edf0f4;
+  border-radius: 0;
+  background: transparent;
+  min-width: 0;
+}
+.team-account-form .class-picker-grid > label.selected {
+  background: #f3f7fc;
+  border-color: #e2eaf4;
+}
+.team-account-form .class-picker-grid > label > svg {
+  display: none;
+}
+.team-account-form .class-picker-grid strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+.team-account-form .class-picker-grid small {
+  font-size: 11px;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.team-account-form .class-picker-total {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  line-height: 1.5;
+  margin: 10px 0 16px;
+  font-size: 12px;
+}
+.team-account-form .team-election-grants {
+  gap: 0;
+  margin-bottom: 8px;
+  max-height: 170px;
+}
+.team-account-form .team-election-grants > label {
+  padding: 9px 0;
+  border-bottom: 1px solid #edf0f4;
+  font-size: 13px;
+}
+.team-account-form .team-election-grants > label:last-child {
+  border: 0;
+}
+.team-empty-scope {
+  margin: 0 0 12px;
+  color: #7d8998;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .team-account-form .team-account-fields {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .team-account-form .class-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 10px;
+  }
+  .team-account-form .class-picker-tools {
+    flex-wrap: wrap;
+  }
+  .team-account-form .class-picker-tools .clean-search {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+}
+
+.team-account-form .field input,
+.team-account-form .field select {
+  min-height: 42px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}

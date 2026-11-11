@@ -18,23 +18,23 @@ export type TeamAccount = {
 export const permissions = [
   {
     id: 'manageElections',
-    label: 'Criar e editar eleições',
-    text: 'Nome, candidatos, fotos e cópias.',
+    label: 'Preparar eleições',
+    text: 'Criar eleições, cadastrar candidatos e incluir fotos.',
   },
   {
     id: 'manageVoters',
-    label: 'Escolher turmas e gerenciar eleitores',
-    text: 'Lista de eleitores, títulos e liberações.',
+    label: 'Definir quem pode votar',
+    text: 'Selecionar turmas, imprimir títulos e cancelar liberações.',
   },
   {
     id: 'publishElections',
-    label: 'Publicar e encerrar eleições',
-    text: 'Modelos de urna e período de votação.',
+    label: 'Abrir e encerrar a votação',
+    text: 'Escolher urnas e definir o período de votação.',
   },
   {
     id: 'viewResults',
-    label: 'Consultar e exportar resultados',
-    text: 'Apuração das eleições permitidas.',
+    label: 'Consultar resultados',
+    text: 'Ver a apuração e baixar os resultados.',
   },
 ];
 export const allowed = (me: TeamAccount | undefined, key: string) =>
@@ -46,6 +46,7 @@ function AccountForm({
   elections,
   busy,
   save,
+  cancel,
 }: {
   value?: TeamAccount;
   me: TeamAccount;
@@ -53,6 +54,7 @@ function AccountForm({
   elections: Election[];
   busy: boolean;
   save: (v: any) => Promise<void>;
+  cancel: () => void;
 }) {
   const [v, setV] = useState<any>(
       value
@@ -74,8 +76,10 @@ function AccountForm({
   return (
     <form
       className="editor-form team-account-form"
+      aria-busy={busy}
       onSubmit={async (ev) => {
         ev.preventDefault();
+        if (busy) return;
         setError('');
         try {
           await save(v);
@@ -114,40 +118,40 @@ function AccountForm({
           />
         </Field>
       </div>
-      <Field
-        label={value ? 'Nova senha (opcional)' : 'Senha de acesso'}
-        hint={
-          value
-            ? 'Preencha para redefinir a senha e encerrar as sessões desta conta.'
-            : 'Use pelo menos 10 caracteres.'
-        }
-      >
-        <input
-          type="password"
-          required={!value}
-          minLength={10}
-          maxLength={128}
-          autoComplete="new-password"
-          value={v.password}
-          onChange={(ev) => change('password', ev.target.value)}
-        />
-      </Field>
-      <Field label="Tipo de acesso">
-        <select
-          value={v.role}
-          disabled={protectedAccount}
-          onChange={(ev) => change('role', ev.target.value)}
+      <div className="team-account-fields team-account-credentials">
+        <Field
+          label={value ? 'Nova senha (opcional)' : 'Senha de acesso'}
+          hint={value ? 'Deixe em branco para manter a senha.' : 'Use pelo menos 10 caracteres.'}
         >
-          <option value="staff">Equipe · acesso definido pelo administrador</option>
-          <option value="admin">Administrador · acesso completo</option>
-        </select>
-      </Field>
+          <input
+            type="password"
+            required={!value}
+            minLength={10}
+            maxLength={128}
+            autoComplete="new-password"
+            value={v.password}
+            onChange={(ev) => change('password', ev.target.value)}
+          />
+        </Field>
+        <Field label="Tipo de acesso">
+          <select
+            value={v.role}
+            disabled={protectedAccount}
+            onChange={(ev) => change('role', ev.target.value)}
+          >
+            <option value="staff">Equipe</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </Field>
+      </div>
       {v.role === 'admin' ? (
-        <p className="info-banner">Administradores gerenciam todas as turmas, eleições e contas.</p>
+        <p className="team-admin-note">
+          Acesso completo a eleições, alunos, turmas, usuários e histórico.
+        </p>
       ) : (
         <>
           <fieldset className="team-permissions">
-            <legend>O que esta pessoa pode fazer?</legend>
+            <legend>Permissões nas eleições</legend>
             {permissions.map((p) => (
               <label key={p.id}>
                 <input
@@ -168,32 +172,44 @@ function AccountForm({
                 </span>
               </label>
             ))}
+            <p className="team-roster-note">
+              Somente administradores podem importar listas ou alterar o cadastro de alunos.
+            </p>
           </fieldset>
           <fieldset className="team-class-scope">
-            <legend>Turmas permitidas</legend>
+            <legend>Turmas disponíveis</legend>
             <label className="check-row">
               <input
                 type="checkbox"
                 checked={v.classes === null}
                 onChange={(ev) => change('classes', ev.target.checked ? null : [])}
               />
-              Todas as turmas, incluindo futuras importações
+              Todas as turmas
             </label>
+            <p className="team-scope-hint">
+              {v.classes === null
+                ? 'Inclui as turmas cadastradas futuramente.'
+                : 'Selecione as turmas que esta pessoa poderá usar nas eleições.'}
+            </p>
             {v.classes !== null && (
               <ClassPicker
                 options={classes}
+                emptyText="Ainda não há turmas cadastradas."
                 value={v.classes}
                 onChange={(x) => change('classes', x)}
               />
             )}
           </fieldset>
-          <details className="simple-details">
-            <summary>Liberar eleições já existentes ({v.electionIds.length})</summary>
-            <p className="simple-hint">
-              A pessoa acessa as eleições que criou. Selecione outras que também poderá gerenciar
-              com as permissões acima.
+          <fieldset className="team-election-scope">
+            <legend>Eleições adicionais</legend>
+            <p className="team-scope-hint">
+              As eleições criadas pela pessoa já ficam disponíveis para ela. Marque outras que
+              também poderá acessar.
             </p>
             <div className="team-election-grants">
+              {elections.length === 0 && (
+                <p className="team-empty-scope">Nenhuma eleição cadastrada.</p>
+              )}
               {elections.map((e) => (
                 <label key={e.id}>
                   <input
@@ -212,7 +228,7 @@ function AccountForm({
                 </label>
               ))}
             </div>
-          </details>
+          </fieldset>
         </>
       )}
       {value && !protectedAccount && (
@@ -226,9 +242,12 @@ function AccountForm({
         </label>
       )}
       <div className="form-footer">
+        <button type="button" className="button secondary" disabled={busy} onClick={cancel}>
+          Cancelar
+        </button>
         <button className="button primary" disabled={busy}>
           <Check size={17} />
-          {busy ? 'Salvando…' : 'Salvar acesso'}
+          {busy ? 'Salvando…' : 'Salvar'}
         </button>
       </div>
     </form>
@@ -253,9 +272,9 @@ export function TeamPanel({
   return (
     <>
       <PageHeading
-        eyebrow="EQUIPE E PERMISSÕES"
+        eyebrow="ADMINISTRAÇÃO"
         title="Acessos"
-        description="Cada pessoa com as turmas e permissões de que precisa."
+        description="Usuários com acesso ao painel de eleições."
         icon={<ShieldCheck size={25} />}
         action={
           <button className="button primary" onClick={() => setEditing(null)}>
@@ -307,6 +326,7 @@ export function TeamPanel({
             classes={classes}
             elections={elections}
             busy={busy}
+            cancel={() => setEditing(undefined)}
             save={async (v) => {
               await save(v);
               setEditing(undefined);

@@ -27,11 +27,13 @@ export function ClassPicker({
   value,
   onChange,
   disabled = false,
+  emptyText,
 }: {
   options: SchoolClass[];
   value: string[];
   onChange: (v: string[]) => void;
   disabled?: boolean;
+  emptyText?: string;
 }) {
   const [search, setSearch] = useState('');
   const visible = options.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())),
@@ -61,8 +63,12 @@ export function ClassPicker({
           }
         >
           {visible.length && visible.every((c) => value.includes(c.name))
-            ? 'Desmarcar turmas'
-            : 'Selecionar turmas'}
+            ? search.trim()
+              ? 'Desmarcar encontradas'
+              : 'Desmarcar todas'
+            : search.trim()
+              ? 'Marcar encontradas'
+              : 'Marcar todas'}
         </button>
       </div>
       <div className="class-picker-grid">
@@ -90,7 +96,7 @@ export function ClassPicker({
         <p className="simple-hint">
           {options.length
             ? 'Nenhuma turma encontrada.'
-            : 'O administrador precisa importar ou liberar as turmas para esta conta.'}
+            : emptyText || 'O administrador precisa importar ou liberar as turmas para esta conta.'}
         </p>
       )}
       <p className="class-picker-total">

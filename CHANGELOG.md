@@ -89,3 +89,9 @@ Validação: tipos das interfaces, build V2, sintaxe PHP, 184 verificações HTT
 - Restringe fotos privadas por conta/eleição, inclusive ao associar imagens a candidatos.
 - Reduz os dados retornados na liberação por matrícula e reforça uploads, JSON, limites de corpo e cabeçalhos.
 - Neutraliza fórmulas em exportações CSV e documenta bloqueios adicionais de arquivos no Nginx.
+
+## 2026-11-11 · Organização dos acessos
+
+- Simplifica os textos e a apresentação das permissões, turmas e eleições adicionais.
+- Explicita que importar listas e alterar alunos são tarefas exclusivas de administradores.
+- Acrescenta cancelamento no formulário e melhora os rótulos da seleção de turmas.
