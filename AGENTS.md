@@ -11,6 +11,7 @@ feita por aqui também seja atualizada no GitHub.
 - Use mensagens de commit claras e resuma mudanças e validações na entrega.
 - Mantenha a estrutura PHP/MySQL, a raiz pública `public`, o histórico da versão
   anterior e o design original do Colégio Santa Inês.
+- Use títulos objetivos e textos curtos. Evite slogans e frases decorativas no painel.
 - A configuração pertence à eleição. As urnas são compartilhadas por várias eleições.
 - Preserve participação e votos. A exclusão de aluno é lógica, sem remover eleitorados
   publicados. Votos não recebem matrícula ou identificação de eleitor.

@@ -51,8 +51,7 @@ export default function Home({
       </section>
       <section className="home-start-guide" aria-labelledby="home-guide-title">
         <div className="home-guide-heading">
-          <p>PASSO A PASSO</p>
-          <h2 id="home-guide-title">Sua eleição, do início ao resultado.</h2>
+          <h2 id="home-guide-title">Passo a passo</h2>
         </div>
         <ol className="home-guide-list">
           {firstSteps.map(([title, description], index) => (
