@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## 12/11/2026 — Home, importação segura e conferência para CloudPanel
+
+- Home com crédito da T.I. no subtítulo, eleição em destaque por horário, participação e próximos passos objetivos.
+- Indicadores abrem a lista no filtro correto; atalhos respeitam o acesso administrativo e da equipe.
+- Importação une listas pela matrícula, mantém alunos ausentes e preserva dados completos diante de campos vazios e abreviações reconhecidas.
+- Prévia e confirmação informam os dados preservados; novos cadastros incompletos cancelam o arquivo inteiro, sem gravação parcial.
+- Diagnóstico do CloudPanel confere também os arquivos compilados V2; guia de instalação e atualização revisado.
+- Dependências React/RSC atualizadas para 19.2.9, incluindo a correção de GHSA-xqc2-xf4c-x3h3 na prévia hospedada.
+
+Validação: 355 verificações HTTP PHP/MySQL e 348 verificações D1 em bancos descartáveis, 35 verificações de temporizadores e exportação, migrações repetidas sem alterar votos, diagnóstico de instalação, tipos, builds e revisão visual da home e dos filtros. A revisão em largura de celular incluiu nomes longos, sem transbordamento horizontal. Os testes locais não substituem a conferência do Vhost, HTTPS e das credenciais reais no servidor da escola. Auditorias dos pacotes raiz, interface e prévia em 12/11/2026: zero alertas reportados. A correção RSC segue o [aviso oficial do React](https://github.com/react/react/security/advisories/GHSA-xqc2-xf4c-x3h3).
+
 ## 11/11/2026 — Fluxo completo, apuração pública e arquivo de eleições
 
 - Home com identidade do colégio, próximos passos e crédito da T.I.

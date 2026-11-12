@@ -238,4 +238,101 @@ ok(
     JSON.stringify(initialRoster),
   'Cadastro geral não reescreve eleitorado publicado',
 );
+// Mesma política de completude exercitada no serviço PHP, usando apenas nomes fictícios.
+const full = csv([
+  ['João Pedro da Silva', 'Completa A', 'CM001'],
+  ['Maria Silva', 'Completa A', 'CM002'],
+]);
+await app('csvImport', { csv: full });
+const partial = csv([
+  ['Joao P. Silva', '', 'CM001'],
+  ['Maria de Souza Silva', 'Completa B', 'CM002'],
+]);
+r = await app('csvPreview', { csv: partial });
+ok(
+  r.status === 200 &&
+    r.body.rows[0].name === 'João Pedro da Silva' &&
+    r.body.rows[0].className === 'Completa A' &&
+    r.body.rows[0].change === 'unchanged',
+  'Prévia mantém nome completo e turma vazia',
+);
+ok(
+  r.body.preservedCount === 1 && r.body.rows[0].keptExisting.join(',') === 'name,className',
+  'Prévia identifica dados preservados',
+);
+ok(
+  r.body.rows[1].name === 'Maria de Souza Silva' &&
+    r.body.rows[1].className === 'Completa B' &&
+    r.body.rows[1].change === 'updated',
+  'Prévia permite enriquecer nome e mudar turma',
+);
+r = await app('csvImport', { csv: partial });
+ok(r.status === 200 && r.body.preservedCount === 1, 'Gravação confirma dados preservados');
+let merged = (await current()).students;
+ok(
+  merged.find((x) => x.matricula === 'CM001').name === 'João Pedro da Silva' &&
+    merged.find((x) => x.matricula === 'CM001').className === 'Completa A',
+  'Nome completo e acentos sobrevivem à lista abreviada',
+);
+ok(
+  merged.find((x) => x.matricula === 'CM002').name === 'Maria de Souza Silva',
+  'Nome mais completo do arquivo é aproveitado',
+);
+r = await app('csvImport', { csv: csv([['João Silva', 'Completa B', 'CM001']]) });
+merged = (await current()).students;
+ok(
+  r.status === 200 &&
+    r.body.summary.updated === 1 &&
+    merged.find((x) => x.matricula === 'CM001').name === 'João Pedro da Silva' &&
+    merged.find((x) => x.matricula === 'CM001').className === 'Completa B',
+  'Turma atualiza sem encurtar nome',
+);
+r = await app('csvImport', { csv: csv([['', '', 'CM001']]) });
+ok(
+  r.status === 200 && r.body.summary.unchanged === 1 && r.body.preservedCount === 1,
+  'Campos vazios existentes não apagam cadastro',
+);
+r = await app('csvImport', { csv: csv([['JOAO PEDRO DA SILVA', '', 'CM001']]) });
+ok(
+  r.status === 200 &&
+    (await current()).students.find((x) => x.matricula === 'CM001').name === 'João Pedro da Silva',
+  'Acentos e apresentação já conferidos são preservados',
+);
+const completeBefore = (await current()).students;
+const incomplete = csv([
+  ['Válido', 'Completa A', 'CMNEW'],
+  ['', '', 'CMINVALID'],
+]);
+ok(
+  (await app('csvPreview', { csv: incomplete })).status === 400 &&
+    (await app('csvImport', { csv: incomplete })).status === 400,
+  'Aluno novo incompleto recusado na prévia e confirmação',
+);
+ok(
+  JSON.stringify((await current()).students) === JSON.stringify(completeBefore),
+  'Linha incompleta não grava parcialmente',
+);
+await app('deleteStudent', { matricula: 'CM001', className: 'Completa B' });
+r = await app('csvImport', { csv: csv([['', '', 'CM001']]) });
+ok(
+  r.status === 200 &&
+    r.body.summary.reactivated === 1 &&
+    (await current()).students.find((x) => x.matricula === 'CM001').name === 'João Pedro da Silva',
+  'Reativação reaproveita cadastro completo',
+);
+const concurrentFiles = [
+  csv([['Ana C.', 'Completa A', 'CMCONC']]),
+  csv([['Ana Carolina Oliveira', 'Completa A', 'CMCONC']]),
+];
+const mergedResponses = await Promise.all(concurrentFiles.map((csv) => app('csvImport', { csv })));
+ok(
+  mergedResponses.every((x) => x.status === 200) &&
+    (await current()).students.find((x) => x.matricula === 'CMCONC').name ===
+      'Ana Carolina Oliveira',
+  'Listas concorrentes mantêm o nome completo',
+);
+ok(
+  (await current()).students.filter((x) => x.matricula === 'CMCONC').length === 1,
+  'Mescla concorrente mantém matrícula única',
+);
 console.log(`Importação comparada: ${passed} verificações aprovadas.`);

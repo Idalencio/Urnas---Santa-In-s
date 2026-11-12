@@ -44,4 +44,35 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:both=list(pool
 check('Importação concorrente recalcula',all(r.ok for r in both) and sum(r.json()['summary']['added'] for r in both)==1 and sum(r.json()['summary']['unchanged'] for r in both)==1)
 check('Importação concorrente não duplica',sum(row['matricula']=='IMCONC' for row in roster())==1)
 check('Eleitorado publicado preservado',app('electors',electionId=seed['id']).json()['rows']==old_rows)
+# A importação enriquece o cadastro por matrícula, sem substituir a lista mais completa.
+full=csv([['João Pedro da Silva','Completa A','CM001'],['Maria Silva','Completa A','CM002']])
+assert app('csvImport',csv=full).ok
+partial=csv([['Joao P. Silva','','CM001'],['Maria de Souza Silva','Completa B','CM002']])
+r=app('csvPreview',csv=partial);plan=r.json()
+check('Prévia mantém nome completo e turma vazia',r.ok and plan['rows'][0]['name']=='João Pedro da Silva' and plan['rows'][0]['className']=='Completa A' and plan['rows'][0]['change']=='unchanged')
+check('Prévia identifica dados preservados',plan['preservedCount']==1 and plan['rows'][0]['keptExisting']==['name','className'])
+check('Prévia permite enriquecer nome e mudar turma',plan['rows'][1]['name']=='Maria de Souza Silva' and plan['rows'][1]['className']=='Completa B' and plan['rows'][1]['change']=='updated')
+r=app('csvImport',csv=partial)
+check('Gravação confirma dados preservados',r.ok and r.json()['preservedCount']==1)
+merged={row['matricula']:row for row in roster()}
+check('Nome completo e acentos sobrevivem à lista abreviada',merged['CM001']['name']=='João Pedro da Silva' and merged['CM001']['className']=='Completa A')
+check('Nome mais completo do arquivo é aproveitado',merged['CM002']['name']=='Maria de Souza Silva')
+r=app('csvImport',csv=csv([['João Silva','Completa B','CM001']]))
+check('Turma atualiza sem encurtar nome',r.ok and r.json()['summary']['updated']==1 and next(row for row in roster() if row['matricula']=='CM001')['name']=='João Pedro da Silva' and next(row for row in roster() if row['matricula']=='CM001')['className']=='Completa B')
+r=app('csvImport',csv=csv([['','','CM001']]))
+check('Campos vazios existentes não apagam cadastro',r.ok and r.json()['summary']['unchanged']==1 and r.json()['preservedCount']==1)
+r=app('csvImport',csv=csv([['JOAO PEDRO DA SILVA','','CM001']]))
+check('Acentos e apresentação já conferidos são preservados',r.ok and next(row for row in roster() if row['matricula']=='CM001')['name']=='João Pedro da Silva')
+stable=roster();invalid=csv([['Válido','Completa A','CMNEW'],['','','CMINVALID']])
+check('Aluno novo incompleto é recusado na prévia e confirmação',app('csvPreview',csv=invalid).status_code==400 and app('csvImport',csv=invalid).status_code==400)
+check('Linha incompleta não grava parcialmente',roster()==stable and not any(row['matricula']=='CMNEW' for row in roster()))
+assert app('deleteStudent',matricula='CM001',className='Completa B').ok
+r=app('csvImport',csv=csv([['','','CM001']]))
+check('Reativação reaproveita cadastro completo',r.ok and r.json()['summary']['reactivated']==1 and next(row for row in roster() if row['matricula']=='CM001')['name']=='João Pedro da Silva')
+# Os dois arquivos podem chegar em qualquer ordem: a matrícula continua única e completa.
+files=[csv([['Ana C.','Completa A','CMCONC']]),csv([['Ana Carolina Oliveira','Completa A','CMCONC']])]
+def merge_import(file):return requests.post(BASE+'/api/v2/app',json={'action':'csvImport','csv':file},headers=h,cookies=cookies,timeout=20)
+with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:merged_responses=list(pool.map(merge_import,files))
+check('Listas concorrentes mantêm o nome completo',all(r.ok for r in merged_responses) and next(row for row in roster() if row['matricula']=='CMCONC')['name']=='Ana Carolina Oliveira')
+check('Mescla concorrente mantém matrícula única',sum(row['matricula']=='CMCONC' for row in roster())==1)
 print(f'Importação PHP: {passed} verificações aprovadas.')

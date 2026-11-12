@@ -728,21 +728,62 @@ function csvRows(text: any) {
     const name = clean(r[cols[0]]),
       className = clean(r[cols[1]], 80),
       m = matricula(r[cols[2]]);
-    if (!name || !className) fail('Confira nome e turma na linha ' + (i + 2));
+    // O plano completa campos vazios do cadastro; novos alunos exigem nome e turma.
     if (seen.has(m)) fail('Matrícula repetida na linha ' + (i + 2) + ': ' + m);
     seen.add(m);
     return { name, className, matricula: m };
   });
 }
-/** A mesma matrícula atualiza o cadastro; a comparação usa o estado desta revisão. */
+/** Preserva o nome completo quando o arquivo traz uma abreviação do mesmo nome. */
+function importName(incoming: string, existing: string) {
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  const tokens = (name: string) =>
+    name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean);
+  const short = tokens(incoming),
+    full = tokens(existing);
+  if (JSON.stringify(short) === JSON.stringify(full)) {
+    const accents = (name: string) => [...name].filter((c) => c.codePointAt(0)! > 127).length;
+    return accents(existing) >= accents(incoming) ? existing : incoming;
+  }
+  let cursor = 0;
+  for (const part of short) {
+    while (
+      cursor < full.length &&
+      full[cursor] !== part &&
+      !(part.length === 1 && full[cursor].startsWith(part))
+    )
+      cursor++;
+    if (cursor === full.length) return incoming;
+    cursor++;
+  }
+  return short.length <= full.length ? existing : incoming;
+}
+/** Mescla por matrícula na revisão atual; ausentes do arquivo nunca são removidos. */
 function csvPlan(s: any, incoming: any[]) {
   const byMatricula = new Map<string, any>(
     s.students.map((student: any) => [student.matricula, student]),
   );
   const summary = { added: 0, updated: 0, unchanged: 0, reactivated: 0 };
+  let preservedCount = 0;
   const rows = incoming.map((student) => {
-    const row = { ...student, className: canonicalClass(s, student.className) };
-    const old = byMatricula.get(row.matricula);
+    const old = byMatricula.get(student.matricula);
+    const row = {
+      ...student,
+      name: importName(student.name, old?.name || ''),
+      className: canonicalClass(s, student.className || old?.className || ''),
+    };
+    if (!row.name || !row.className)
+      fail('Preencha nome e turma do novo aluno de matrícula ' + row.matricula + '.');
+    const keptExisting = [];
+    if (old && row.name !== student.name) keptExisting.push('name');
+    if (old && !student.className) keptExisting.push('className');
+    if (keptExisting.length) preservedCount++;
     const change = !old
       ? 'added'
       : old.active === 0
@@ -751,9 +792,9 @@ function csvPlan(s: any, incoming: any[]) {
           ? 'updated'
           : 'unchanged';
     summary[change]++;
-    return { ...row, change };
+    return { ...row, change, keptExisting };
   });
-  return { rows, count: rows.length, summary };
+  return { rows, count: rows.length, summary, preservedCount };
 }
 function validImage(s: string) {
   return (
@@ -1049,7 +1090,12 @@ async function admin(req: Request, b: any) {
             byMatricula.set(value.matricula, value);
           }
         }
-        return { ok: true, count: plan.count, summary: plan.summary };
+        return {
+          ok: true,
+          count: plan.count,
+          summary: plan.summary,
+          preservedCount: plan.preservedCount,
+        };
       }
       if (action === 'enroll') {
         const e = draft(s, b.electionId),

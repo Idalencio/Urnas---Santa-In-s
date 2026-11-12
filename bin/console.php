@@ -59,8 +59,18 @@ try {
                 'Permita a gravação em storage e storage/uploads pelo usuário PHP do site.',
             );
         }
-        if (!is_file(__DIR__ . '/../public/app.html')) {
-            throw new RuntimeException('Interface compilada não encontrada.');
+        foreach (
+            ['index.php', 'app.html', 'v2.html', 'csi-logo.png', 'assets/v2.js', 'assets/v2.css']
+            as $file
+        ) {
+            if (
+                !is_file(__DIR__ . '/../public/' . $file) ||
+                filesize(__DIR__ . '/../public/' . $file) === 0
+            ) {
+                throw new RuntimeException(
+                    'Arquivo público necessário não encontrado: public/' . $file,
+                );
+            }
         }
         echo 'PHP ' .
             PHP_VERSION .

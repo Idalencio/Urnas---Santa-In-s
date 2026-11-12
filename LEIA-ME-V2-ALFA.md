@@ -10,8 +10,12 @@ UTF-8 com todas as turmas, contendo `nome`, `turma` e `matricula`. O botão
 **Baixar modelo** fornece o formato. Confira a prévia e confirme a importação.
 
 O sistema agrupa os alunos por turma e mostra suas quantidades. Uma matrícula já
-cadastrada atualiza o nome e a turma sem duplicar o aluno. Os alunos ausentes do novo
-arquivo continuam no cadastro. A importação não altera o eleitorado de eleições publicadas.
+cadastrada é comparada para atualizar o cadastro sem duplicar o aluno. Os alunos
+ausentes do novo arquivo continuam no cadastro. Campos vazios de alunos já
+cadastrados e abreviações reconhecidas mantêm o dado mais completo existente.
+Nomes mais completos são aproveitados; uma turma preenchida atualiza a turma.
+Confira na prévia as correções de nome e turma antes de confirmar. Alunos novos
+precisam de nome e turma. A importação não altera o eleitorado de eleições publicadas.
 
 Aceita vírgula ou ponto e vírgula, até 10.000 alunos / 1,5 MB por arquivo.
 A matrícula é texto: `001234` e `1234` são diferentes. Mantenha a coluna como texto

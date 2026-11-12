@@ -53,7 +53,8 @@ export function requestId() {
     h.slice(20)
   );
 }
-export function status(e: Election, now = Date.now()) {
+export type ElectionStatus = 'draft' | 'scheduled' | 'active' | 'closed';
+export function status(e: Election, now = Date.now()): ElectionStatus {
   return e.closed
     ? 'closed'
     : !e.published

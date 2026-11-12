@@ -23,9 +23,12 @@ anterior em `/`. Este repositório não contém senhas iniciais ou conexões rea
 5. Habilite `pdo_mysql`, `mbstring`, `openssl` e `fileinfo`. As pastas `storage`
    e `storage/uploads` devem permitir gravação pelo usuário PHP do site.
 6. Configure as rotas conforme `deploy/nginx-location.conf` e abra o domínio em HTTPS.
-7. Entre em `/v2` com `admin` e a senha definida. O primeiro login prepara as
-   tabelas e migrações pendentes. O usuário MySQL precisa das permissões de instalação.
-8. Use **Acessos** para criar contas da equipe e liberar turmas, eleições e funções.
+7. Execute `php bin/console.php install` e `php bin/console.php check`. O diagnóstico
+   confere extensões, conexão, armazenamento e os arquivos compilados das duas interfaces.
+   O usuário MySQL precisa das permissões de instalação. O primeiro login também
+   aplica migrações pendentes, sem substituir o banco existente.
+8. Entre em `/v2` com `admin` e a senha definida. Use **Acessos** para criar contas
+   da equipe e liberar a organização das próprias eleições e as turmas permitidas.
 
 A interface já está compilada em `public`. Não é necessário instalar Node.js no
 servidor. A senha do painel e a senha do banco são independentes.
@@ -36,12 +39,39 @@ servidor. A senha do painel e a senha do banco são independentes.
 2. Atualize os arquivos da aplicação a partir da versão validada no GitHub.
 3. Preserve os arquivos privados e as imagens existentes. Não inicialize outro banco
    nem substitua a senha de uma instalação que já funciona.
-4. Confirme que o domínio continua apontando para `public` e entre em `/v2`.
-5. As migrações ainda não aplicadas serão executadas pela aplicação.
+4. Confirme que o domínio continua apontando para `public`. Execute
+   `php bin/console.php install` e `php bin/console.php check`.
+5. Somente as migrações ainda não aplicadas são executadas. Entre em `/v2`.
 6. Atualize o navegador com Ctrl+F5.
 
 O Git não inclui os arquivos privados. Não é necessário executar `init-admin`
 em uma instalação que já possui `config/local-admin.php`.
+
+## Conferência antes de liberar para a escola
+
+- O domínio aponta para a pasta `public` do projeto completo; não mova o restante
+  do projeto para dentro dela. A rota `/v2` deve abrir o painel, sem erro 404.
+- HTTPS, conexão MySQL e gravação em `storage/uploads` estão funcionando.
+- O Vhost usa `deploy/nginx-location.conf`, sem cache de páginas nas APIs e urnas.
+- O comando `check` termina com configuração e armazenamento OK.
+- Faça uma eleição de teste com alunos fictícios, candidato e vice; publique,
+  vote uma vez, confirme o bloqueio de repetição e abra o link público da apuração.
+
+A validação automatizada usa PHP 8.4 e MariaDB locais descartáveis. Ela cobre
+instalação/migrações, rotas, permissões, voto único, apuração e importação concorrente.
+Os dados da prévia hospedada são independentes do MySQL do CloudPanel e não são
+copiados ao atualizar arquivos. A configuração do servidor da escola precisa ser
+conferida no próprio servidor antes do uso real.
+
+## Atualizar a lista de alunos
+
+A importação une os cadastros pela matrícula; não apaga nem substitui o banco
+inteiro. Alunos ausentes no arquivo permanecem no cadastro. Campos vazios de uma
+matrícula conhecida reaproveitam os dados existentes; abreviações reconhecidas
+mantêm o nome completo. Para um aluno novo, nome e turma são obrigatórios.
+Uma turma preenchida no arquivo atualiza a turma, e nomes diferentes podem
+corrigir o cadastro: confira a prévia antes de confirmar. Votos e eleitorados
+publicados são preservados.
 
 ## Comandos de manutenção
 

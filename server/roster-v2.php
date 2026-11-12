@@ -44,15 +44,94 @@ function v2RosterTransaction(callable $fn): mixed
         sql('SELECT RELEASE_LOCK(?)', [$key]);
     }
 }
-/** Compara a matrícula inteira; nomes iguais não identificam a mesma pessoa. */
+/** Reconhece abreviações do mesmo nome, sem tratar um nome diferente como mais completo. */
+function v2ImportName(string $incoming, string $existing): string
+{
+    if (!$incoming) {
+        return $existing;
+    }
+    if (!$existing) {
+        return $incoming;
+    }
+    $tokens = function (string $name): array {
+        $name = strtr(mb_strtolower($name), [
+            'á' => 'a',
+            'à' => 'a',
+            'â' => 'a',
+            'ã' => 'a',
+            'ä' => 'a',
+            'å' => 'a',
+            'é' => 'e',
+            'è' => 'e',
+            'ê' => 'e',
+            'ë' => 'e',
+            'í' => 'i',
+            'ì' => 'i',
+            'î' => 'i',
+            'ï' => 'i',
+            'ó' => 'o',
+            'ò' => 'o',
+            'ô' => 'o',
+            'õ' => 'o',
+            'ö' => 'o',
+            'ú' => 'u',
+            'ù' => 'u',
+            'û' => 'u',
+            'ü' => 'u',
+            'ç' => 'c',
+            'ñ' => 'n',
+        ]);
+        return preg_split('/[^\p{L}\p{N}]+/u', $name, -1, PREG_SPLIT_NO_EMPTY);
+    };
+    $short = $tokens($incoming);
+    $full = $tokens($existing);
+    $cursor = 0;
+    if ($short === $full) {
+        // Uma planilha sem acentos não deve empobrecer o nome já conferido.
+        preg_match_all('/[^\x00-\x7f]/u', $incoming, $newAccents);
+        preg_match_all('/[^\x00-\x7f]/u', $existing, $oldAccents);
+        return count($oldAccents[0]) >= count($newAccents[0]) ? $existing : $incoming;
+    }
+    foreach ($short as $part) {
+        while (
+            $cursor < count($full) &&
+            $full[$cursor] !== $part &&
+            !(mb_strlen($part) === 1 && str_starts_with($full[$cursor], $part))
+        ) {
+            $cursor++;
+        }
+        if ($cursor === count($full)) {
+            return $incoming;
+        }
+        $cursor++;
+    }
+    return count($short) <= count($full) ? $existing : $incoming;
+}
+/** Mescla pela matrícula inteira; nunca substitui o cadastro pela lista inteira. */
 function v2CsvPlan(array $incoming, array $existing): array
 {
     $byMatricula = array_column($existing, null, 'matricula');
     $summary = ['added' => 0, 'updated' => 0, 'unchanged' => 0, 'reactivated' => 0];
     $rows = [];
+    $preservedCount = 0;
     foreach ($incoming as $student) {
-        $student['className'] = v2CanonicalClass($student['className']);
         $old = $byMatricula[$student['matricula']] ?? null;
+        $original = $student;
+        $student['name'] = v2ImportName($student['name'], $old['name'] ?? '');
+        $student['className'] = v2CanonicalClass($student['className'] ?: $old['className'] ?? '');
+        if (!$student['name'] || !$student['className']) {
+            fail('Preencha nome e turma do novo aluno de matrícula ' . $student['matricula'] . '.');
+        }
+        $keptExisting = [];
+        if ($old && $student['name'] !== $original['name']) {
+            $keptExisting[] = 'name';
+        }
+        if ($old && !$original['className']) {
+            $keptExisting[] = 'className';
+        }
+        if ($keptExisting) {
+            $preservedCount++;
+        }
         $change = !$old
             ? 'added'
             : ((int) $old['active'] === 0
@@ -61,9 +140,14 @@ function v2CsvPlan(array $incoming, array $existing): array
                     ? 'updated'
                     : 'unchanged'));
         $summary[$change]++;
-        $rows[] = $student + ['change' => $change];
+        $rows[] = $student + ['change' => $change, 'keptExisting' => $keptExisting];
     }
-    return ['rows' => $rows, 'count' => count($rows), 'summary' => $summary];
+    return [
+        'rows' => $rows,
+        'count' => count($rows),
+        'summary' => $summary,
+        'preservedCount' => $preservedCount,
+    ];
 }
 function v2CsvPreview(array $incoming): array
 {
@@ -87,7 +171,12 @@ function v2ImportCsv(array $incoming): array
                 [$student['matricula'], $student['name'], $student['className']],
             );
         }
-        return ['ok' => true, 'count' => $plan['count'], 'summary' => $plan['summary']];
+        return [
+            'ok' => true,
+            'count' => $plan['count'],
+            'summary' => $plan['summary'],
+            'preservedCount' => $plan['preservedCount'],
+        ];
     });
 }
 /** Edita o cadastro geral; mantém a identidade quando a matrícula já é eleitora. */

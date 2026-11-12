@@ -383,7 +383,7 @@ function CandidateForm({
   );
 }
 type ImportSummary = { added: number; updated: number; unchanged: number; reactivated: number };
-type ImportStudent = Student & { change: keyof ImportSummary };
+type ImportStudent = Student & { change: keyof ImportSummary; keptExisting?: string[] };
 const importLabels: Record<keyof ImportSummary, string> = {
   added: 'Novo',
   updated: 'Atualizar',
@@ -404,6 +404,7 @@ function CsvImport({
   const [rows, setRows] = useState<ImportStudent[] | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [result, setResult] = useState<ImportSummary | null>(null);
+  const [preservedCount, setPreservedCount] = useState(0);
   const [filename, setFilename] = useState('');
   const [error, setError] = useState(''),
     [reading, setReading] = useState(false);
@@ -427,6 +428,7 @@ function CsvImport({
               setRows(null);
               setSummary(null);
               setResult(null);
+              setPreservedCount(0);
               setCsv('');
               setFilename('');
               if (file.size > 1500000) {
@@ -441,6 +443,7 @@ function CsvImport({
                 setFilename(file.name);
                 setRows(plan.rows);
                 setSummary(plan.summary);
+                setPreservedCount(plan.preservedCount || 0);
               } catch (err: any) {
                 setError(err.message);
               } finally {
@@ -464,17 +467,24 @@ function CsvImport({
         </button>
       </div>
       <p className="simple-hint">
-        Use as colunas nome, turma e matricula. Cada matrícula identifica um aluno: nome e turma são
-        atualizados, e os novos alunos são adicionados. Mantenha os zeros à esquerda.
+        Use as colunas nome, turma e matricula. As listas são unidas pela matrícula, sem duplicar
+        alunos. Mantenha os zeros à esquerda.
       </p>
       <p className="simple-hint">
-        Alunos ausentes do arquivo continuam no cadastro. As listas das eleições já publicadas são
-        preservadas.
+        Alunos ausentes continuam no cadastro. Campos vazios e nomes abreviados preservam os dados
+        mais completos já cadastrados. Uma turma preenchida atualiza a turma do aluno. As listas das
+        eleições publicadas são preservadas.
       </p>
       {error && (
         <div className="error-banner" role="alert">
           {error}
         </div>
+      )}
+      {preservedCount > 0 && (
+        <p className="info-banner" role="status">
+          Dados do cadastro {rows ? 'serão preservados' : 'foram preservados'} em {preservedCount}{' '}
+          {preservedCount === 1 ? 'aluno' : 'alunos'}, pois estão mais completos que os do arquivo.
+        </p>
       )}
       {result && (
         <div className="info-banner import-result" role="status">
@@ -524,7 +534,17 @@ function CsvImport({
               <tbody>
                 {rows.slice(0, 5).map((row) => (
                   <tr key={row.matricula}>
-                    <td>{row.name}</td>
+                    <td>
+                      {row.name}
+                      {!!row.keptExisting?.length && (
+                        <small
+                          className="simple-hint"
+                          style={{ display: 'block', margin: '4px 0 0' }}
+                        >
+                          Dados completos preservados
+                        </small>
+                      )}
+                    </td>
                     <td>{row.className}</td>
                     <td>{row.matricula}</td>
                     <td>
@@ -558,6 +578,7 @@ function CsvImport({
               try {
                 const done = await action('csvImport', { csv });
                 setResult(done.summary);
+                setPreservedCount(done.preservedCount || 0);
                 setRows(null);
                 setSummary(null);
                 setCsv('');
@@ -616,6 +637,7 @@ export default function App() {
     [notice, setNotice] = useState('');
   const [publishedTab, setPublishedTab] = useState('voting');
   const [tallyId, setTallyId] = useState('');
+  const [electionFilter, setElectionFilter] = useState('current');
   const [view, setView] = useState('home'),
     [selected, setSelected] = useState(''),
     [creating, setCreating] = useState(false),
@@ -714,6 +736,7 @@ export default function App() {
   function go(next: string) {
     setPreviewModel(null);
     setView(next);
+    if (next === 'elections') setElectionFilter('current');
     setEditingSchedule(false);
     setSelected('');
     setCreating(false);
@@ -961,6 +984,10 @@ export default function App() {
                     if (found) choose(found);
                   }}
                   go={go}
+                  browse={(filter) => {
+                    go('elections');
+                    setElectionFilter(filter);
+                  }}
                 />
               )}
               {view === 'elections' && !e && !creating && (
@@ -971,6 +998,7 @@ export default function App() {
                     </div>
                   )}
                   <ElectionList
+                    initialFilter={electionFilter}
                     elections={data.elections}
                     canCreate={canEdit}
                     create={create}

@@ -127,6 +127,29 @@ return [
                 raise RuntimeError("O servidor PHP local não respondeu.")
             for suite in ("integration-v2.py", "access-v2.py", "roster-v2.py", "delete-election-v2.py", "import-v2.py", "tally-v2.py", "security-v2.py", "lifecycle-v2.py"):
                 subprocess.run([os.sys.executable, str(ROOT / "tests" / suite)], env=env, check=True)
+        # Exercita os comandos usados no CloudPanel, sem tocar na instalação real.
+        before = php(r"""
+        require 'server/bootstrap.php';
+        echo json_encode(\Urna\all('SELECT election_id,candidate_id,kind,COUNT(*) total FROM v2_ballots GROUP BY election_id,candidate_id,kind ORDER BY election_id,candidate_id,kind'));
+        """).stdout
+        for _ in range(2):
+            subprocess.run([PHP, "bin/console.php", "install"], cwd=qa, env=env, check=True, capture_output=True)
+        after = php(r"""
+        require 'server/bootstrap.php';
+        echo json_encode(\Urna\all('SELECT election_id,candidate_id,kind,COUNT(*) total FROM v2_ballots GROUP BY election_id,candidate_id,kind ORDER BY election_id,candidate_id,kind'));
+        """).stdout
+        assert before == after, 'Reaplicar migrações alterou votos.'
+        ready = subprocess.run([PHP, "bin/console.php", "check"], cwd=qa, env=env, capture_output=True, text=True)
+        assert ready.returncode == 0, ready.stderr
+        asset = qa / "public/assets/v2.js"
+        saved_asset = asset.read_bytes()
+        try:
+            asset.unlink()
+            missing = subprocess.run([PHP, "bin/console.php", "check"], cwd=qa, env=env, capture_output=True, text=True)
+            assert missing.returncode != 0 and 'assets/v2.js' in missing.stderr
+        finally:
+            asset.write_bytes(saved_asset)
+        print("OK CloudPanel: migrações repetidas preservam votos; diagnóstico valida extensões, conexão, pastas e arquivos V2.", flush=True)
         php(r"""
         require 'server/bootstrap.php';require 'server/auth.php';require 'server/v2.php';require 'server/access-v2.php';require 'server/roster-v2.php';
         $before=\Urna\one('SELECT COUNT(*) n FROM v2_students')['n'];

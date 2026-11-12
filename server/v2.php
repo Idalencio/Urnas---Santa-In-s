@@ -468,9 +468,7 @@ function v2Csv(mixed $text): array
         $name = clean($values[$map['nome']] ?? '');
         $class = clean($values[$map['turma']] ?? '', 80);
         $matricula = v2Matricula($values[$map['matricula']] ?? '');
-        if (!$name || !$class) {
-            fail('Preencha nome e turma na linha ' . $line . '.');
-        }
+        // Campos vazios podem reaproveitar o cadastro existente; o plano valida novos alunos.
         if (isset($seen[$matricula])) {
             fail('Matrícula repetida na linha ' . $line . ': ' . $matricula);
         }

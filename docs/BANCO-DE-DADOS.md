@@ -218,7 +218,7 @@ A API pode responder 400 (dados inválidos), 401 (sessão ausente/expirada), 403
 | Liberação de matrícula          | 5 minutos                                                               |
 | Sessão administrativa           | 12 horas                                                                |
 
-Importar uma matrícula existente atualiza nome/turma e ativa o cadastro. Ausência no CSV não exclui o aluno. Cadastros manuais ativos duplicados são recusados. Não há integração automática de matrícula, sincronização de alunos externos ou processamento de planilha XLSX implementados.
+Importar uma matrícula existente mescla nome/turma e ativa o cadastro, preservando campos completos quando o arquivo contém campos vazios ou abreviações reconhecidas. Ausência no CSV não exclui o aluno. Cadastros manuais ativos duplicados são recusados. Não há integração automática de matrícula, sincronização de alunos externos ou processamento de planilha XLSX implementados.
 
 O POST da API V2 PHP aceita até 2.200.000 bytes de corpo JSON. Como o painel envia fotos em base64, esse limite pode recusar fotos abaixo dos 2 MiB permitidos pela rotina de arquivo; o máximo efetivo por esse caminho fica próximo de 1,65 milhão de bytes, descontando o envelope JSON. A rota multipart tem limite de arquivo de 2 MiB. O adaptador hospedado aceita corpo de até 2.850.000 bytes. Esta diferença já existe no código atual e não foi alterada nesta documentação.
 
@@ -857,7 +857,7 @@ A migração `008_election_lifecycle.sql` acrescenta `public_token CHAR(64) NULL
 
 ## Importação comparada por matrícula
 
-`csvPreview` de `POST /api/v2/app` retorna `rows`, `count` e `summary`. Cada linha
+`csvPreview` de `POST /api/v2/app` retorna `rows`, `count`, `summary` e `preservedCount`. Cada linha
 recebe `change`: `added`, `updated`, `unchanged` ou `reactivated`. `summary` contém
 a quantidade em cada situação. Os nomes antigos de turmas são resolvidos antes
 da comparação. A operação exige administrador e não grava o cadastro.
@@ -866,9 +866,19 @@ da comparação. A operação exige administrador e não grava o cadastro.
 a trava do cadastro geral serializa essa transação; a primary key de
 `v2_students.matricula` e o upsert protegem a unicidade. No D1, cada tentativa de
 atualização por revisão refaz a comparação e mantém uma entrada por matrícula.
-A resposta inclui `ok`, `count` e o `summary` calculado na gravação.
+A resposta inclui `ok`, `count`, `preservedCount` e o `summary` calculado na gravação.
 
-A mesma matrícula atualiza nome e turma. Cadastros idênticos não são regravados;
+A mesma matrícula mescla nome e turma. O cadastro final é a união por matrícula,
+sem escolher uma lista inteira apenas porque tem mais linhas. Para alunos conhecidos,
+campos vazios reaproveitam os valores existentes. Um nome abreviado reconhecido
+como parte do nome existente mantém o nome completo, incluindo acentos; um nome
+mais completo do arquivo é aproveitado. Nomes diferentes representam correções
+e usam o arquivo, após a conferência da prévia. Uma turma preenchida usa o arquivo,
+após resolver renomeações. Alunos novos sem nome ou turma são recusados antes de
+qualquer gravação. `keptExisting` informa em cada linha os campos reaproveitados,
+e `preservedCount` conta os alunos com dados preservados, tanto na prévia quanto
+na confirmação real. O cadastro manual continua disponível para correções explícitas.
+Cadastros idênticos não são regravados;
 matrículas inativas são reativadas no mesmo registro. Nomes iguais com matrículas
 diferentes representam cadastros distintos. Os zeros à esquerda fazem parte da
 matrícula. Uma matrícula repetida dentro do CSV cancela a importação inteira.
