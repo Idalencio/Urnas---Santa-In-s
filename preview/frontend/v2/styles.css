@@ -6391,8 +6391,8 @@
   grid-template-columns: minmax(0, 1fr) 240px;
   gap: 64px;
   align-items: center;
-  min-height: 420px;
-  padding: 48px 52px;
+  min-height: 380px;
+  padding: 40px 46px;
   position: relative;
   overflow: hidden;
   background: #153773;
@@ -6403,8 +6403,8 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 48px;
-  bottom: 48px;
+  top: 40px;
+  bottom: 40px;
   width: 3px;
   background: #d9b75f;
 }
@@ -6423,7 +6423,7 @@
   color: #fff;
   max-width: 22ch;
   margin: 16px 0 14px;
-  font-size: clamp(32px, 3.4vw, 42px);
+  font-size: clamp(32px, 3.3vw, 40px);
   line-height: 1.2;
   font-weight: 600;
   letter-spacing: -0.04em;
@@ -6549,6 +6549,119 @@
   }
   .home-intro-brand {
     display: none;
+  }
+}
+
+/* Guia curto de uso, sem repetir os painéis de gestão. */
+.home-start-guide {
+  margin-top: 22px;
+  padding: 25px 28px 27px;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: #fff;
+}
+.home-guide-heading {
+  margin-bottom: 25px;
+}
+.home-guide-heading > p {
+  color: #65758b;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  margin: 0 0 7px;
+}
+.home-guide-heading h2 {
+  color: #254777;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+  margin: 0;
+}
+.home-guide-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.home-guide-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0 21px;
+  border-left: 1px solid #e8edf4;
+  min-width: 0;
+}
+.home-guide-list li:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.home-guide-list li:last-child {
+  padding-right: 0;
+}
+.home-guide-index {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #dee6f2;
+  border-radius: 9px;
+  background: #f3f6fb;
+  color: #4d6e9b;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-guide-list h3 {
+  color: #2d4f7c;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 3px 0 7px;
+}
+.home-guide-list p {
+  color: #65758b;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+@media (max-width: 1000px) {
+  .home-guide-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 23px 25px;
+  }
+  .home-guide-list li {
+    border-left: 0;
+    padding: 0;
+  }
+}
+@media (max-width: 650px) {
+  .home-start-guide {
+    margin-top: 18px;
+    padding: 24px 22px 25px;
+  }
+  .home-guide-heading {
+    margin-bottom: 23px;
+  }
+  .home-guide-heading h2 {
+    font-size: 19px;
+  }
+  .home-guide-list {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .home-guide-list li {
+    gap: 13px;
+  }
+  .home-guide-list h3 {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .home-guide-list p {
+    font-size: 13px;
   }
 }
 

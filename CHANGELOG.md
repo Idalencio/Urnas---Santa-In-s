@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 12/11/2026 — Apresentação com passo a passo compacto
+
+- Home com as cores originais, botão de criação e guia de quatro etapas com textos curtos.
+- Hierarquia visual e espaçamento ajustados para computador e celular, sem indicadores ou listas de gestão na abertura.
+- Conferência do botão de criação, das permissões e da apresentação responsiva.
+
 ## 12/11/2026 — Boas-vindas com as cores originais e criação de eleição
 
 - Abertura com o azul e o dourado do colégio, texto curto e crédito da T.I. no subtítulo.

@@ -1,5 +1,12 @@
 import { Plus, ArrowRight } from 'lucide-react';
 
+const firstSteps = [
+  ['Prepare a eleição', 'Defina o nome, os candidatos e o vice, se houver.'],
+  ['Selecione os eleitores', 'Escolha as turmas e desmarque quem não vai votar.'],
+  ['Abra a votação', 'Selecione a urna e defina os horários.'],
+  ['Acompanhe a apuração', 'Veja os resultados e compartilhe o link público.'],
+];
+
 /** Boas-vindas e acesso direto à criação; a gestão continua nas abas do painel. */
 export default function Home({
   canCreate,
@@ -41,6 +48,25 @@ export default function Home({
           <strong>Santa Inês</strong>
           <span>Eleições escolares</span>
         </div>
+      </section>
+      <section className="home-start-guide" aria-labelledby="home-guide-title">
+        <div className="home-guide-heading">
+          <p>PASSO A PASSO</p>
+          <h2 id="home-guide-title">Sua eleição, do início ao resultado.</h2>
+        </div>
+        <ol className="home-guide-list">
+          {firstSteps.map(([title, description], index) => (
+            <li key={title}>
+              <span className="home-guide-index" aria-hidden="true">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <div>
+                <h3>{title}</h3>
+                <p>{description}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );
