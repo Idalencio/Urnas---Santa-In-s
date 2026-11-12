@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 12/11/2026 — Home institucional simplificada
+
+- Tela inicial dedicada às boas-vindas, à identidade do Colégio Santa Inês e ao crédito da T.I.
+- Removidos da home os indicadores, as listas de eleições, os atalhos e o passo a passo; a gestão permanece nas abas existentes.
+- Apresentação centralizada e responsiva, com o azul e o dourado do colégio.
+
 ## 12/11/2026 — Home, importação segura e conferência para CloudPanel
 
 - Home com crédito da T.I. no subtítulo, eleição em destaque por horário, participação e próximos passos objetivos.

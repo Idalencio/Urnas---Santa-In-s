@@ -637,7 +637,6 @@ export default function App() {
     [notice, setNotice] = useState('');
   const [publishedTab, setPublishedTab] = useState('voting');
   const [tallyId, setTallyId] = useState('');
-  const [electionFilter, setElectionFilter] = useState('current');
   const [view, setView] = useState('home'),
     [selected, setSelected] = useState(''),
     [creating, setCreating] = useState(false),
@@ -736,7 +735,6 @@ export default function App() {
   function go(next: string) {
     setPreviewModel(null);
     setView(next);
-    if (next === 'elections') setElectionFilter('current');
     setEditingSchedule(false);
     setSelected('');
     setCreating(false);
@@ -972,24 +970,7 @@ export default function App() {
             <Login onReady={load} />
           ) : (
             <>
-              {view === 'home' && (
-                <Home
-                  me={data.me}
-                  elections={data.elections}
-                  classCount={data.classes.length}
-                  canCreate={canEdit}
-                  create={create}
-                  choose={(item) => {
-                    const found = data.elections.find((x) => x.id === item.id);
-                    if (found) choose(found);
-                  }}
-                  go={go}
-                  browse={(filter) => {
-                    go('elections');
-                    setElectionFilter(filter);
-                  }}
-                />
-              )}
+              {view === 'home' && <Home />}
               {view === 'elections' && !e && !creating && (
                 <>
                   {error && (
@@ -998,7 +979,6 @@ export default function App() {
                     </div>
                   )}
                   <ElectionList
-                    initialFilter={electionFilter}
                     elections={data.elections}
                     canCreate={canEdit}
                     create={create}

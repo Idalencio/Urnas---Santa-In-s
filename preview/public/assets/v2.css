@@ -6380,720 +6380,84 @@
   padding-bottom: 10px;
 }
 
-/* Início do painel: prioridades reais e identidade do colégio. */
+/* Home institucional: somente boas-vindas, identidade e autoria. */
 .school-home {
+  width: 100%;
   max-width: 1320px;
   margin: 0 auto;
-}
-.home-welcome {
-  position: relative;
+  min-height: 520px;
+  min-height: clamp(460px, calc(100svh - 270px), 660px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(245px, 310px);
-  gap: 44px;
-  padding: 35px 38px;
-  background: #153773;
-  border: 1px solid #16366c;
+  place-items: center;
+  padding: 64px 32px;
+  background: #fff;
+  border: 1px solid #e3e9f2;
   border-radius: 14px;
-  overflow: hidden;
 }
-.home-welcome::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 34px;
-  bottom: 34px;
-  width: 3px;
-  background: #d9b75f;
-}
-.home-welcome-copy {
-  align-self: center;
-  min-width: 0;
-}
-.home-kicker {
-  display: block;
-  color: #7c8ca4;
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
-}
-.home-welcome .home-kicker {
-  color: #b9c9e3;
-}
-.home-welcome h1 {
-  max-width: 21ch;
-  margin: 13px 0 14px;
-  color: #fff;
-  font-size: clamp(29px, 3vw, 38px);
-  line-height: 1.17;
-  letter-spacing: -0.04em;
-  font-weight: 650;
-}
-.home-subtitle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  color: #e7d5a5;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.home-subtitle > span {
-  width: 5px;
-  height: 5px;
-  flex: 0 0 5px;
-  border-radius: 50%;
-  background: #e8bf5b;
-}
-.home-description {
-  color: #c5d2e7;
-  font-size: 13px;
-  line-height: 1.75;
-  margin: 18px 0 0;
-  max-width: 44ch;
-}
-.home-welcome-actions {
-  display: flex;
-  gap: 21px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 25px;
-}
-.home-welcome .home-create {
-  background: #fff;
-  color: #173c77;
-  border: 1px solid #fff;
-  min-height: 42px;
-  font-size: 12px;
-  font-weight: 650;
-  box-shadow: none;
-}
-.home-welcome .home-create:hover {
-  background: #edf3fc;
-}
-.home-link {
-  border: 0;
-  background: none;
-  padding: 8px 0;
-  display: inline-flex;
-  gap: 9px;
-  align-items: center;
-  color: #f1f5fc;
-  font-size: 12px;
-  cursor: pointer;
-}
-.home-link:hover {
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-.home-spotlight {
-  min-width: 0;
-  align-self: center;
-  background: #ffffff0a;
-  border: 1px solid #ffffff24;
-  padding: 21px 23px;
-  border-radius: 11px;
-}
-.home-spotlight-heading {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  color: #c3d1e8;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  margin-bottom: 16px;
-}
-.home-spotlight-heading img {
-  width: 28px;
-  height: 32px;
-  object-fit: contain;
-}
-.home-phase {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: #dce7f8;
-}
-.home-phase > span {
-  height: 5px;
-  width: 5px;
-  background: #bfcfe8;
-  border-radius: 50%;
-}
-.home-phase.active > span {
-  background: #a0dcb9;
-}
-.home-phase.scheduled > span {
-  background: #e8c980;
-}
-.home-spotlight h2 {
-  color: #fff;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.35;
-  margin: 9px 0 7px;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.home-spotlight > p {
-  font-size: 12px;
-  color: #c6d4e9;
-  line-height: 1.65;
-  margin: 0;
-}
-.home-spotlight-turnout {
-  display: grid;
-  gap: 8px;
-  margin-top: 16px;
-  font-size: 11px;
-  color: #c6d4e9;
-}
-.home-spotlight-turnout progress {
-  display: block;
+.home-intro {
   width: 100%;
-  height: 4px;
-  border: 0;
-  border-radius: 9px;
-  overflow: hidden;
-  appearance: none;
-  background: #ffffff20;
-}
-.home-spotlight-turnout progress::-webkit-progress-bar {
-  background: #ffffff20;
-}
-.home-spotlight-turnout progress::-webkit-progress-value {
-  background: #9fd2b5;
-  border-radius: 9px;
-}
-.home-spotlight-turnout progress::-moz-progress-bar {
-  background: #9fd2b5;
-}
-.home-spotlight-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  width: 100%;
-  padding: 14px 0 0;
-  margin-top: 17px;
-  color: #fff;
-  font-size: 12px;
-  background: none;
-  border: 0;
-  border-top: 1px solid #ffffff24;
-  cursor: pointer;
-  text-align: left;
-}
-.home-spotlight-action:hover {
-  color: #e8d496;
-}
-.home-identity {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-left: 1px solid #ffffff24;
-  color: #fff;
-}
-.home-identity img {
-  width: 91px;
-  height: 91px;
-  object-fit: contain;
-  margin-bottom: 12px;
-}
-.home-identity strong {
-  font-size: 16px;
-  font-weight: 550;
-}
-.home-identity > span {
-  color: #c4d0e5;
-  font-size: 11px;
-}
-.home-counts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 15px;
-  margin: 20px 0 28px;
-}
-.home-count {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  text-align: left;
-  background: #fff;
-  border: 1px solid #e0e6ef;
-  border-radius: 11px;
-  padding: 21px;
-  cursor: pointer;
-  min-width: 0;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-}
-.home-count:hover {
-  border-color: #acc0e1;
-  background: #fcfdff;
-}
-.home-count-icon {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  background: #eef3fb;
-  color: #426394;
-  border-radius: 10px;
-}
-.home-count.scheduled .home-count-icon {
-  background: #fcf5e8;
-  color: #a57c2d;
-}
-.home-count.active .home-count-icon {
-  background: #edf7f0;
-  color: #427c5d;
-}
-.home-count-copy {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  flex: 1;
-}
-.home-count-copy > span {
-  color: #526680;
-  font-size: 12px;
-}
-.home-count-copy strong {
-  color: #173b75;
-  font-size: 30px;
-  line-height: 1.1;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.home-count-copy small {
-  color: #7e8ca0;
-  font-size: 11px;
-}
-.home-count-arrow {
-  flex: 0 0 auto;
-  color: #8b9ab1;
-}
-.home-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-.home-work {
-  background: #fff;
-  border: 1px solid #dfe6ef;
-  border-radius: 12px;
-  overflow: hidden;
-  min-width: 0;
-}
-.home-section-heading {
-  padding: 23px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-}
-.home-section-heading h2,
-.home-guide-heading h2 {
-  margin: 7px 0 0;
-  color: #1b3e75;
-  font-size: 19px;
-  letter-spacing: -0.025em;
-  font-weight: 600;
-}
-.home-section-heading .text-button {
-  font-size: 11px;
-  white-space: nowrap;
-}
-.home-election {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-top: 1px solid #ebeff4;
-  padding: 21px 24px;
-  cursor: pointer;
-}
-.home-election:hover {
-  background: #f8faff;
-}
-.home-election-symbol {
-  display: grid;
-  place-items: center;
-  width: 39px;
-  height: 39px;
-  flex: 0 0 auto;
-  border-radius: 10px;
-  color: #5976a3;
-  background: #f0f4fb;
-}
-.home-election-symbol.active {
-  color: #4a805f;
-  background: #eef7f0;
-}
-.home-election-symbol.scheduled {
-  color: #a2803e;
-  background: #fbf6eb;
-}
-.home-election-copy {
-  display: grid;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-.home-election-phase {
-  color: #7184a0;
-  font-size: 11px;
-}
-.home-election-phase.active {
-  color: #3d7958;
-}
-.home-election-phase.scheduled {
-  color: #987329;
-}
-.home-election-copy strong {
-  color: #234474;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.home-election-copy small {
-  font-size: 12px;
-  color: #75849a;
-  line-height: 1.6;
-}
-.home-election-arrow {
-  color: #8194ae;
-  flex: 0 0 auto;
-}
-.home-work-note {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  background: #fafbfd;
-  border-top: 1px solid #ebeff4;
-  padding: 16px 24px;
-  color: #718197;
-  font-size: 11px;
-  line-height: 1.75;
-}
-.home-work-note > span {
-  width: 4px;
-  height: 4px;
-  background: #a8b7cc;
-  flex: 0 0 4px;
-  border-radius: 50%;
-}
-.home-work-note p {
-  margin: 0;
-}
-.home-work-note button {
-  padding: 0;
-  background: none;
-  border: 0;
-  color: #365e99;
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.home-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  max-width: 720px;
   text-align: center;
-  padding: 28px 24px 38px;
 }
-.home-empty-icon {
-  display: grid;
-  place-items: center;
-  width: 62px;
-  height: 62px;
-  background: #f0f4fb;
-  border-radius: 50%;
-  color: #6482b0;
+.home-intro-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 16px;
+  margin: 0 auto 25px;
 }
-.home-empty h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #2b4b7d;
-  margin: 20px 0 8px;
-}
-.home-empty p {
-  max-width: 38ch;
-  font-size: 12px;
-  color: #78879b;
-  line-height: 1.75;
-  margin: 0 0 19px;
-}
-.home-empty .button {
-  font-size: 12px;
-}
-.home-side {
-  display: grid;
-  gap: 24px;
-  min-width: 0;
-}
-.home-shortcuts h2 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #375477;
-  margin: 0 0 13px;
-}
-.home-shortcut-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.home-shortcut-grid > button {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  min-height: 89px;
-  padding: 16px 14px;
-  background: #fff;
-  border: 1px solid #e0e6ef;
-  border-radius: 10px;
-  text-align: left;
-  cursor: pointer;
-}
-.home-shortcut-grid > button:hover {
-  border-color: #a7bedf;
-  background: #fcfdff;
-}
-.home-shortcut-grid > button > svg {
-  flex: 0 0 auto;
-  color: #6f87ac;
-  margin-top: 2px;
-}
-.home-shortcut-grid > button > span {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
-.home-shortcut-grid strong {
-  color: #31547f;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-.home-shortcut-grid small {
-  color: #7989a0;
+.home-intro-school {
+  color: #627b9c;
   font-size: 11px;
-  line-height: 1.55;
-}
-.home-steps {
-  border: 1px solid #dfe6ef;
-  background: #fff;
-  border-radius: 12px;
-  padding: 21px 23px 0;
-  overflow: hidden;
-}
-.home-steps ol {
-  list-style: none;
-  padding: 0;
-  margin: 24px 0 0;
-}
-.home-steps li {
-  display: flex;
-  gap: 13px;
-  position: relative;
-  padding-bottom: 20px;
-}
-.home-steps li:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  top: 30px;
-  bottom: 5px;
-  width: 1px;
-  background: #e2e9f2;
-}
-.home-step-number {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  flex: 0 0 25px;
-  border: 1px solid #dae3ef;
-  background: #f7f9fc;
-  color: #6e86aa;
-  font-size: 11px;
-  border-radius: 50%;
-}
-.home-steps h3 {
-  color: #31527d;
-  font-size: 13px;
   font-weight: 600;
-  line-height: 1.55;
-  margin: 2px 0 5px;
-}
-.home-steps li p {
-  font-size: 12px;
-  color: #7b899d;
+  letter-spacing: 0.16em;
   line-height: 1.7;
   margin: 0;
 }
-.home-class-note {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: #fafbfd;
-  border-top: 1px solid #e8edf4;
-  padding: 14px 20px;
-  margin: 0 -23px;
-  color: #73849b;
-  font-size: 11px;
-  line-height: 1.65;
+.home-intro h1 {
+  color: #173b76;
+  max-width: 21ch;
+  margin: 17px auto 0;
+  font-size: clamp(30px, 3.3vw, 42px);
+  line-height: 1.22;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
-.home-class-note svg {
-  flex: 0 0 auto;
-  color: #8a9bb3;
+.home-intro-divider {
+  display: block;
+  width: 34px;
+  height: 2px;
+  background: #d6b45d;
+  margin: 27px auto 22px;
 }
-@media (max-width: 1000px) {
-  .home-welcome {
-    gap: 28px;
-    padding: 30px;
-    grid-template-columns: minmax(0, 1fr) 260px;
-  }
-  .home-count {
-    padding: 18px 16px;
-    gap: 12px;
-  }
-  .home-count-icon {
-    width: 34px;
-    height: 34px;
-  }
-  .home-count-copy small {
-    display: none;
-  }
-  .home-columns {
-    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr);
-    gap: 18px;
-  }
+.home-intro-credit {
+  color: #73829a;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
 }
-@media (max-width: 760px) {
-  .home-welcome {
-    grid-template-columns: 1fr;
-    padding: 28px;
-    gap: 24px;
-  }
-  .home-identity {
-    display: none;
-  }
-  .home-spotlight {
-    padding: 18px 20px;
-  }
-  .home-spotlight-heading {
-    display: none;
-  }
-  .home-columns {
-    grid-template-columns: 1fr;
-  }
-  .home-side {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-  }
-  .home-shortcut-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 540px) {
-  .home-welcome {
-    padding: 25px 23px;
+@media (max-width: 650px) {
+  .school-home {
+    min-height: 440px;
+    min-height: calc(100svh - 210px);
+    padding: 48px 24px;
     border-radius: 11px;
   }
-  .home-welcome h1 {
-    font-size: 29px;
+  .home-intro-logo {
+    width: 68px;
+    height: 68px;
+    margin-bottom: 22px;
   }
-  .home-subtitle {
-    font-size: 11px;
-    align-items: baseline;
+  .home-intro-school {
+    font-size: 10px;
   }
-  .home-description {
-    font-size: 12px;
+  .home-intro h1 {
+    font-size: 30px;
   }
-  .home-welcome-actions {
-    gap: 11px 18px;
-    margin-top: 21px;
-  }
-  .home-spotlight {
-    padding: 17px 18px;
-  }
-  .home-spotlight h2 {
-    font-size: 17px;
-  }
-  .home-counts {
-    gap: 9px;
-    margin: 16px 0 23px;
-  }
-  .home-count {
-    display: block;
-    padding: 14px 12px;
-  }
-  .home-count-icon {
-    width: 29px;
-    height: 29px;
-    border-radius: 8px;
-    margin-bottom: 11px;
-  }
-  .home-count-icon svg {
-    width: 16px;
-    height: 16px;
-  }
-  .home-count-copy {
-    gap: 6px;
-  }
-  .home-count-copy > span {
-    font-size: 11px;
-    min-height: 29px;
-    line-height: 1.4;
-  }
-  .home-count-copy strong {
-    font-size: 27px;
-  }
-  .home-count-arrow {
-    display: none;
-  }
-  .home-section-heading {
-    padding: 21px 18px;
-  }
-  .home-election {
-    padding: 19px 18px;
-    gap: 12px;
-  }
-  .home-election-copy strong {
-    font-size: 13px;
-  }
-  .home-work-note {
-    padding: 15px 18px;
-  }
-  .home-side {
-    grid-template-columns: 1fr;
-  }
-  .home-shortcut-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .home-shortcut-grid > button {
-    min-height: 83px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .home-count {
-    transition: none;
+  .home-intro-credit {
+    max-width: 28ch;
+    margin: 0 auto;
   }
 }
 

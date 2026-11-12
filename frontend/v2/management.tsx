@@ -35,7 +35,6 @@ const labels = {
 };
 /** Os filtros usam as eleições já autorizadas pela API, sem ampliar o acesso. */
 export function ElectionList({
-  initialFilter = 'current',
   elections,
   canCreate = true,
   create,
@@ -43,7 +42,6 @@ export function ElectionList({
   go,
   remove,
 }: {
-  initialFilter?: string;
   elections: Details[];
   canCreate?: boolean;
   create: () => void;
@@ -51,7 +49,7 @@ export function ElectionList({
   go: (view: string) => void;
   remove?: (e: Details) => void;
 }) {
-  const [filter, setFilter] = useState(initialFilter);
+  const [filter, setFilter] = useState('current');
   const [search, setSearch] = useState('');
   const groups = [
     { id: 'active', label: 'Abertas', icon: Vote },
