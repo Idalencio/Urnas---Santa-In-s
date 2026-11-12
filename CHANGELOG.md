@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 12/11/2026 — Boas-vindas com as cores originais e criação de eleição
+
+- Abertura com o azul e o dourado do colégio, texto curto e crédito da T.I. no subtítulo.
+- Botão para criar a primeira eleição ou uma nova eleição, conforme os dados da conta e a permissão de organização.
+- Conferência visual em computador e celular, com acesso direto ao formulário de criação.
+
 ## 12/11/2026 — Home institucional simplificada
 
 - Tela inicial dedicada às boas-vindas, à identidade do Colégio Santa Inês e ao crédito da T.I.

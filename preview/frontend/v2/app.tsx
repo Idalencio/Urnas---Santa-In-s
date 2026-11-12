@@ -970,7 +970,14 @@ export default function App() {
             <Login onReady={load} />
           ) : (
             <>
-              {view === 'home' && <Home />}
+              {view === 'home' && (
+                <Home
+                  canCreate={canEdit}
+                  hasElections={data.elections.length > 0}
+                  onCreate={create}
+                  onOpenElections={() => go('elections')}
+                />
+              )}
               {view === 'elections' && !e && !creating && (
                 <>
                   {error && (

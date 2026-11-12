@@ -6380,84 +6380,175 @@
   padding-bottom: 10px;
 }
 
-/* Home institucional: somente boas-vindas, identidade e autoria. */
+/* Boas-vindas com a paleta original e uma ação principal. */
 .school-home {
   width: 100%;
   max-width: 1320px;
   margin: 0 auto;
-  min-height: 520px;
-  min-height: clamp(460px, calc(100svh - 270px), 660px);
-  display: grid;
-  place-items: center;
-  padding: 64px 32px;
-  background: #fff;
-  border: 1px solid #e3e9f2;
-  border-radius: 14px;
 }
 .home-intro {
-  width: 100%;
-  max-width: 720px;
-  text-align: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 64px;
+  align-items: center;
+  min-height: 420px;
+  padding: 48px 52px;
+  position: relative;
+  overflow: hidden;
+  background: #153773;
+  border: 1px solid #16366c;
+  border-radius: 14px;
 }
-.home-intro-logo {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  border-radius: 16px;
-  margin: 0 auto 25px;
+.home-intro::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 48px;
+  bottom: 48px;
+  width: 3px;
+  background: #d9b75f;
+}
+.home-intro-copy {
+  min-width: 0;
 }
 .home-intro-school {
-  color: #627b9c;
+  color: #bacbe5;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   line-height: 1.7;
   margin: 0;
 }
 .home-intro h1 {
-  color: #173b76;
-  max-width: 21ch;
-  margin: 17px auto 0;
-  font-size: clamp(30px, 3.3vw, 42px);
-  line-height: 1.22;
+  color: #fff;
+  max-width: 22ch;
+  margin: 16px 0 14px;
+  font-size: clamp(32px, 3.4vw, 42px);
+  line-height: 1.2;
   font-weight: 600;
   letter-spacing: -0.04em;
   text-wrap: balance;
 }
-.home-intro-divider {
-  display: block;
-  width: 34px;
-  height: 2px;
-  background: #d6b45d;
-  margin: 27px auto 22px;
-}
 .home-intro-credit {
-  color: #73829a;
+  color: #e7d5a5;
   font-size: 12px;
   line-height: 1.7;
   margin: 0;
 }
-@media (max-width: 650px) {
-  .school-home {
-    min-height: 440px;
-    min-height: calc(100svh - 210px);
-    padding: 48px 24px;
-    border-radius: 11px;
+.home-intro-description {
+  max-width: 45ch;
+  color: #cad7eb;
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 22px 0 0;
+}
+.home-intro-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 28px;
+}
+.home-intro .home-create-election {
+  min-height: 44px;
+  padding: 12px 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #173b76;
+  background: #fff;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+  cursor: pointer;
+}
+.home-intro .home-create-election:hover {
+  background: #edf3fc;
+  border-color: #edf3fc;
+}
+.home-intro .home-create-election:focus-visible {
+  outline: 2px solid #edcc79;
+  outline-offset: 4px;
+}
+.home-intro-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 225px;
+  padding-left: 36px;
+  border-left: 1px solid #ffffff25;
+  text-align: center;
+}
+.home-intro-logo {
+  width: 130px;
+  height: 130px;
+  object-fit: contain;
+  border-radius: 24px;
+  margin-bottom: 21px;
+}
+.home-intro-brand strong {
+  color: #fff;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
+}
+.home-intro-brand > span {
+  margin-top: 5px;
+  color: #bdcde5;
+  font-size: 12px;
+  line-height: 1.6;
+}
+@media (max-width: 1000px) {
+  .home-intro {
+    grid-template-columns: minmax(0, 1fr) 185px;
+    gap: 32px;
+    padding: 40px 38px;
+  }
+  .home-intro-brand {
+    padding-left: 28px;
   }
   .home-intro-logo {
-    width: 68px;
-    height: 68px;
-    margin-bottom: 22px;
+    width: 110px;
+    height: 110px;
+  }
+}
+@media (max-width: 650px) {
+  .home-intro {
+    grid-template-columns: 1fr;
+    gap: 0;
+    min-height: 0;
+    padding: 34px 27px 37px;
+    border-radius: 11px;
+  }
+  .home-intro::before {
+    top: 34px;
+    bottom: 37px;
+  }
+  .home-intro h1 {
+    font-size: 32px;
+    margin-top: 15px;
   }
   .home-intro-school {
     font-size: 10px;
   }
-  .home-intro h1 {
-    font-size: 30px;
-  }
   .home-intro-credit {
-    max-width: 28ch;
-    margin: 0 auto;
+    font-size: 11px;
+  }
+  .home-intro-description {
+    font-size: 13px;
+    margin-top: 20px;
+  }
+  .home-intro-actions {
+    margin-top: 25px;
+  }
+  .home-intro .home-create-election {
+    font-size: 12px;
+    padding: 12px 14px;
+  }
+  .home-intro-brand {
+    display: none;
   }
 }
 
