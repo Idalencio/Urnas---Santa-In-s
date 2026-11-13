@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { csvDownload, Empty, formatted } from '../app/components';
 import { status, type Election } from './domain';
+import { matchesVotingDay } from './tally-filter';
 import {
   followTally,
   rankedCandidates,
@@ -441,13 +442,15 @@ export default function TallyPanel({
   select: (id: string) => void;
   remove?: (e: Election) => void;
 }) {
+  const [day, setDay] = useState('');
   const [reported, setReported] = useState<Record<string, TallySnapshot['election']['status']>>({});
   const report = useCallback((snapshot: TallySnapshot) => {
     const { id, status } = snapshot.election;
     setReported((old) => (old[id] === status ? old : { ...old, [id]: status }));
   }, []);
-  const choices = elections
-    .filter((e) => !!e.published)
+  const published = elections.filter((e) => !!e.published);
+  const choices = published
+    .filter((e) => matchesVotingDay(e, day))
     .sort((a, b) => {
       const order = { active: 0, scheduled: 1, closed: 2, draft: 3 };
       return order[status(a)] - order[status(b)] || a.name.localeCompare(b.name, 'pt-BR');
@@ -463,12 +466,28 @@ export default function TallyPanel({
         <div>
           <span className="tally-eyebrow">ELEIÇÕES SANTA INÊS</span>
           <h1>Apuração</h1>
-          <p>Os resultados da escola, em um só lugar.</p>
+          <p>Selecione a eleição para acompanhar os resultados.</p>
         </div>
-        {!!choices.length && (
+      </div>
+      {!!published.length && (
+        <div className={'tally-filters' + (day ? ' is-filtered' : '')}>
+          <label className="tally-day-filter">
+            <span>Dia da votação</span>
+            <input
+              type="date"
+              value={day}
+              aria-describedby="tally-filter-summary"
+              onChange={(ev) => setDay(ev.target.value)}
+            />
+          </label>
           <label className="tally-selector">
             <span>Selecione a eleição</span>
-            <select value={id} onChange={(ev) => select(ev.target.value)}>
+            <select
+              value={id}
+              disabled={!choices.length}
+              onChange={(ev) => select(ev.target.value)}
+            >
+              {!choices.length && <option value="">Nenhuma eleição neste dia</option>}
               {choices.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name} · {labels[reported[e.id] || status(e)]}
@@ -476,8 +495,17 @@ export default function TallyPanel({
               ))}
             </select>
           </label>
-        )}
-      </div>
+          {day && (
+            <button className="button secondary" onClick={() => setDay('')}>
+              Limpar data
+            </button>
+          )}
+          <p id="tally-filter-summary" className="tally-filter-summary" role="status">
+            {choices.length} {choices.length === 1 ? 'eleição disponível' : 'eleições disponíveis'}
+            {day ? ' neste dia' : ' · Todas as datas'} · Horário de Brasília
+          </p>
+        </div>
+      )}
       {selected && (
         <div className="tally-sharing-row">
           {selected.publicToken && <TallyShare token={selected.publicToken} />}{' '}
@@ -493,8 +521,12 @@ export default function TallyPanel({
         <ElectionTally key={id} id={id} report={report} />
       ) : (
         <Empty
-          title="Nenhuma eleição publicada disponível"
-          text="As eleições abertas e encerradas liberadas para sua conta aparecerão aqui."
+          title={day ? 'Nenhuma eleição neste dia' : 'Nenhuma eleição publicada disponível'}
+          text={
+            day
+              ? 'Escolha outro dia ou limpe a data para ver todas as eleições disponíveis.'
+              : 'As eleições abertas e encerradas liberadas para sua conta aparecerão aqui.'
+          }
         />
       )}
     </section>

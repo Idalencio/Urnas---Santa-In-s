@@ -69,6 +69,13 @@ várias eleições abertas ao mesmo tempo. Publicar uma não ocupa nem substitui
 - Cada matrícula participa uma vez de cada eleição, inclusive no mesmo aparelho.
 - A liberação e a contagem são independentes por eleição. Encerrar uma mantém as outras abertas.
 
+## Filtrar a apuração
+
+Em **Apuração**, use **Dia da votação** para filtrar a lista de eleições. O filtro
+considera o período previsto no horário de Brasília, inclusive eleições com mais de
+um dia. **Limpar data** volta a mostrar todas as eleições permitidas para a conta.
+O link público continua abrindo diretamente a apuração da eleição compartilhada.
+
 ## Candidatos e fotos
 
 Aceita seis chapas ou mais, com números de até cinco dígitos, sem zero automático.

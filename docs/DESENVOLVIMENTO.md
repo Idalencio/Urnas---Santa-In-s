@@ -76,11 +76,29 @@ isolado do GitHub Actions. Ele não instala nem publica no servidor da escola.
 
 ## Apuração
 
+### Eleições simultâneas
+
+`tests/multi-election-v2.py` e `preview/scripts/check-multi-election.mjs` criam seis
+eleições abertas nas duas urnas compartilhadas, com seis duplas em cada eleição e
+12 eleitores por lista. Confirmam votos concorrentes e totais diferentes de 1 a 6
+(21 no total), matrícula reutilizável entre eleições, bloqueio de repetição na mesma
+eleição e reenvio idempotente. Conferem os registros gravados, a importação parcial
+sem duplicidade, a preservação das listas publicadas e a exclusão de uma eleição
+sem interferir nas demais. O teste D1 também reabre o SQLite e verifica sua
+integridade. Os dois testes fazem parte da validação automática.
+
+Os testes usam exclusivamente MySQL/MariaDB local e o adaptador D1 sobre SQLite
+descartável, com alunos fictícios. Não medem capacidade de produção nem validam a
+instalação específica do CloudPanel; essa instalação requer um ensaio com os
+aparelhos e a rede da escola.
+
+### Consulta e atualização
+
 A aba Apuração usa `GET /api/v2/tally?election=<id>` com sessão e `X-Urna-Panel`. O serviço exige `viewResults`, vínculo com a eleição e publicação. Retorna candidatos congelados na publicação, votos agregados, totais de participação, situação e `generatedAt`, sem matrícula ou nome de eleitor. PHP lê a fotografia em uma transação; D1 usa uma única leitura do estado. Não grava votos nem altera eleições.
 
 O observador em `frontend/v2/tally-feed.ts` faz a primeira consulta imediatamente, depois a cada 300.000 ms. Usa o horário do servidor para antecipar a consulta à abertura/ao encerramento. Após resposta `closed`, não cria temporizador. Trocar eleição ou sair aborta a consulta e ignora respostas atrasadas. Falhas de rede preservam a última parcial, exibem erro e tentam novamente no próximo ciclo; perda de acesso remove os dados e interrompe as consultas. O carregamento geral de 20 segundos é suspenso nesta aba.
 
-`npm run test:tally` testa o tempo com relógio virtual, sem esperar cinco minutos. `tests/tally-v2.py` e `preview/scripts/check-tally.mjs` validam a API real em banco descartável: votos novos, reenvio idempotente, empate, separação por eleição, proteção de dados, permissões, revogação, agendamento e encerramento.
+`npm run test:tally` testa o tempo com relógio virtual, sem esperar cinco minutos, e o filtro por dia da votação. `frontend/v2/tally-filter.ts` compara o período previsto no fuso `America/Sao_Paulo`, independente do dispositivo; eleições de vários dias aparecem em todos os dias abrangidos e um término à meia-noite não inclui o dia seguinte. O filtro afeta somente a seleção autenticada, sem alterar permissões ou o link público. `tests/tally-v2.py` e `preview/scripts/check-tally.mjs` validam a API real em banco descartável: votos novos, reenvio idempotente, empate, separação por eleição, proteção de dados, permissões, revogação, agendamento e encerramento.
 
 ## Fluxo atual de eleições
 

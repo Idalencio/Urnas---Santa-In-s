@@ -9,7 +9,7 @@
     "format": "prettier --write '**/*.{php,ts,tsx,js,mjs,json,css,md,yml}'",
     "format:check": "prettier --check '**/*.{php,ts,tsx,js,mjs,json,css,md,yml}'",
     "check:legacy": "tsc --noEmit -p frontend/tsconfig.json",
-    "test:tally": "node tests/tally-polling.mjs",
+    "test:tally": "node tests/tally-polling.mjs && node tests/tally-filter.mjs",
     "test:http": "python3 tests/run-http.py",
     "sync:preview": "node bin/sync-preview.mjs",
     "test:security": "node tests/data-protection.mjs"
