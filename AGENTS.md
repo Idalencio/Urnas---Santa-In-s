@@ -29,3 +29,15 @@ feita por aqui também seja atualizada no GitHub.
   listas reais de alunos, bancos, logs ou fotos enviadas. Use os arquivos de exemplo.
 - Use somente bancos locais descartáveis para os testes. Veja `docs/DESENVOLVIMENTO.md`.
 - Não solicite revisões nem envie mensagens a outras pessoas sem instrução do usuário.
+
+## Referência de acesso
+
+- O usuário administrativo inicial e de referência do painel PHP é `admin`.
+- A senha é escolhida no servidor com `php bin/console.php init-admin`; o pacote
+  não contém senha padrão. Uma conta instalada pode ter sua senha alterada em Conta.
+- O usuário pediu que essa referência seja mantida para a continuidade do projeto.
+  Guardar o nome de usuário não cria uma conta nem confirma acesso ao servidor.
+- Em atualizações, preservar `config/local-admin.php`, `config/config.php`, `storage/`
+  e o MySQL existente. Não recriar a conta administrativa de uma instalação em uso.
+- Credenciais SSH, CloudPanel e MySQL são independentes do login da urna.
+  Nunca registrar senhas, hashes privados ou tokens nesta documentação ou no Git.
